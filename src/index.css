@@ -1,0 +1,195 @@
+@import "tailwindcss";
+@plugin "daisyui";
+
+:root {
+  --messenger-blue: #0084ff;
+  --light-gray: #f0f2f5;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* Ngăn chặn cuộn trang */
+}
+
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans",
+    "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tùy chỉnh thanh cuộn cho các phần tử con có thể cuộn */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #bcc0c4;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8adb3;
+}
+
+/* Ẩn thanh cuộn nhưng vẫn giữ chức năng cuộn */
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
+/* Hiệu ứng hover cho các item */
+.hover-effect {
+  transition: background-color 0.2s ease;
+}
+
+/* Tùy chỉnh kiểu chữ tin nhắn */
+.message-text {
+  line-height: 1.28;
+}
+
+/* Hiệu ứng nút */
+button {
+  transition: all 0.2s ease;
+}
+
+/* Modal animations */
+.modal-enter {
+  opacity: 0;
+  transform: scale(0.95);
+}
+
+.modal-enter-active {
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 300ms ease-in-out, transform 300ms ease-in-out;
+}
+
+.modal-exit {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.modal-exit-active {
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 300ms ease-in-out, transform 300ms ease-in-out;
+}
+
+/* Slide animations */
+.slide-in-right {
+  transform: translateX(100%);
+  animation: slideInRight 0.3s forwards;
+}
+
+.slide-out-right {
+  animation: slideOutRight 0.3s forwards;
+}
+
+.slide-in-left {
+  transform: translateX(-100%);
+  animation: slideInLeft 0.3s forwards;
+}
+
+.slide-out-left {
+  animation: slideOutLeft 0.3s forwards;
+}
+
+@keyframes slideInRight {
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes slideInLeft {
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutLeft {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+/* Fade animations */
+.fade-in {
+  opacity: 0;
+  animation: fadeIn 0.3s forwards;
+}
+
+.fade-out {
+  animation: fadeOut 0.3s forwards;
+}
+
+@keyframes fadeIn {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Custom modal transitions for daisyUI */
+.custom-modal {
+  transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+}
+
+.custom-modal.entering,
+.custom-modal.exiting {
+  opacity: 0;
+  transform: scale(0.95);
+}
+
+.custom-modal.entered {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.custom-modal-backdrop {
+  transition: opacity 0.3s ease-out;
+}
+
+.custom-modal-backdrop.entering,
+.custom-modal-backdrop.exiting {
+  opacity: 0;
+}
+
+.custom-modal-backdrop.entered {
+  opacity: 1;
+}
