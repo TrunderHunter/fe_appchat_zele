@@ -49,8 +49,6 @@ const LoginPage = () => {
     e.preventDefault();
     if (!validateForm()) return;
 
-    console.log("Form data:", formData); // Debugging line
-
     const result = await login(formData.email, formData.password);
     if (result.success) {
       toast.success("Đăng nhập thành công!");

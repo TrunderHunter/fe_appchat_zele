@@ -38,10 +38,7 @@ const UserProfilePopup = ({ isOpen, onClose }) => {
   const popupRef = useRef(null);
 
   // Sử dụng ModalContext để quản lý modal ProfileViewMode
-  const { 
-    openProfileModal, 
-    openProfileViewModeModal
-  } = useModalContext();
+  const { openProfileModal, openProfileViewModeModal } = useModalContext();
 
   // Đóng popup khi click ra ngoài
   useEffect(() => {

@@ -30,7 +30,7 @@ export const ModalProvider = ({ children }) => {
     isProfileViewModeOpen,
     openProfileViewModeModal: () => setIsProfileViewModeOpen(true),
     closeProfileViewModeModal: () => setIsProfileViewModeOpen(false),
-    toggleProfileViewModeModal: () => setIsProfileViewModeOpen(prev => !prev),
+    toggleProfileViewModeModal: () => setIsProfileViewModeOpen((prev) => !prev),
 
     // ProfileEditMode modal
     isProfileEditModeOpen,

@@ -4,20 +4,17 @@ import ProfileViewMode from "./ProfileViewMode";
 import ProfileEditMode from "./ProfileEditMode";
 import ProfileAvatarMode from "./ProfileAvatarMode";
 import useAuthStore from "../../stores/authStore";
+import userService from "../../services/userService";
 import toast from "react-hot-toast";
-import axios from "axios";
 
 const ProfileModal = () => {
   const modalRef = useRef(null);
-  const { 
-    isProfileViewModeOpen, 
-    closeProfileViewModeModal 
-  } = useModalContext();
-  
+  const { isProfileViewModeOpen, closeProfileViewModeModal } =
+    useModalContext();
+
   const user = useAuthStore((state) => state.user);
   const updateUserProfile = useAuthStore((state) => state.updateUserProfile);
-  const updatePrimaryAvatar = useAuthStore((state) => state.updatePrimaryAvatar);
-  
+
   // State để quản lý chế độ (view/edit/avatar) hiện tại
   const [mode, setMode] = useState("view");
   // State để quản lý hiệu ứng slide
@@ -38,15 +35,15 @@ const ProfileModal = () => {
     dob: {
       day: "1",
       month: "1",
-      year: "2000"
-    }
+      year: "2000",
+    },
   });
 
   // Khởi tạo formData từ thông tin user hiện tại
   useEffect(() => {
     if (user) {
       const dobParts = user.dob ? new Date(user.dob) : new Date();
-      
+
       setFormData({
         name: user.name || "",
         phone: user.phone || "",
@@ -54,10 +51,10 @@ const ProfileModal = () => {
         dob: {
           day: dobParts.getDate().toString(),
           month: (dobParts.getMonth() + 1).toString(),
-          year: dobParts.getFullYear().toString()
-        }
+          year: dobParts.getFullYear().toString(),
+        },
       });
-      
+
       // Khởi tạo danh sách avatar và avatar đang được chọn
       if (user.avatar_images && user.avatar_images.length > 0) {
         setAvatars(user.avatar_images);
@@ -91,7 +88,7 @@ const ProfileModal = () => {
 
   // Xử lý khi người dùng click vào nền để đóng modal
   const handleModalBackdropClick = (e) => {
-    const modalBox = document.querySelector('.profile-modal-box');
+    const modalBox = document.querySelector(".profile-modal-box");
     if (modalBox && !modalBox.contains(e.target)) {
       closeProfileViewModeModal();
     }
@@ -101,7 +98,7 @@ const ProfileModal = () => {
   const handleSwitchToAvatar = () => {
     setIsTransitioning(true);
     setSlideDirection("slide");
-    
+
     setTimeout(() => {
       setMode("avatar");
       setSlideDirection("");
@@ -113,7 +110,7 @@ const ProfileModal = () => {
   const handleSwitchToEdit = () => {
     setIsTransitioning(true);
     setSlideDirection("slide");
-    
+
     setTimeout(() => {
       setMode("edit");
       setSlideDirection("");
@@ -125,7 +122,7 @@ const ProfileModal = () => {
   const handleBackToView = () => {
     setIsTransitioning(true);
     setSlideDirection("slide-back");
-    
+
     setTimeout(() => {
       setMode("view");
       setSlideDirection("");
@@ -136,20 +133,20 @@ const ProfileModal = () => {
   // Xử lý thay đổi input
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
   // Xử lý thay đổi ngày tháng năm sinh
   const handleDateChange = (type, value) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       dob: {
         ...prev.dob,
-        [type]: value
-      }
+        [type]: value,
+      },
     }));
   };
 
@@ -187,17 +184,17 @@ const ProfileModal = () => {
       // Tạo đối tượng dob từ dữ liệu form
       const { day, month, year } = formData.dob;
       const dob = new Date(`${year}-${month}-${day}`);
-      
+
       const profileData = {
         name: formData.name,
         phone: formData.phone,
         gender: formData.gender,
-        dob: dob.toISOString()
+        dob: dob.toISOString(),
       };
-      
+
       // Gọi API cập nhật thông tin
       const result = await updateUserProfile(profileData);
-      
+
       if (result.success) {
         toast.success("Cập nhật thông tin thành công!");
         handleBackToView(); // Quay lại chế độ xem
@@ -216,14 +213,14 @@ const ProfileModal = () => {
     if (!file) return;
 
     // Kiểm tra định dạng file
-    if (!file.type.match('image.*')) {
-      toast.error('Vui lòng chọn file hình ảnh');
+    if (!file.type.match("image.*")) {
+      toast.error("Vui lòng chọn file hình ảnh");
       return;
     }
 
-    // Kiểm tra kích thước file (tối đa 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Kích thước file không được vượt quá 5MB');
+    // Kiểm tra kích thước file (tối đa 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Kích thước file không được vượt quá 10MB");
       return;
     }
 
@@ -232,27 +229,27 @@ const ProfileModal = () => {
 
       // Tạo FormData để gửi file
       const formData = new FormData();
-      formData.append('avatar', file);
+      formData.append("avatar", file);
 
-      // Gọi API upload avatar
-      const response = await axios.post(`/api/user/${user._id}/upload-avatar`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
+      // Gọi API thông qua userService
+      const data = await userService.uploadAvatar(user._id, formData);
 
-      if (response.data.status === 'success') {
-        // Thêm avatar mới vào danh sách
-        const newAvatarUrl = response.data.data.avatarUrl;
-        setAvatars(prev => [...prev, newAvatarUrl]);
-        setSelectedAvatar(newAvatarUrl);
-        toast.success('Tải lên ảnh đại diện thành công');
+      // Sử dụng getUserAvatars để lấy danh sách avatar mới nhất
+      const updatedAvatars = await userService.getUserAvatars(user._id);
+
+      // Lấy avatar mới nhất (được thêm vào sau cùng)
+      if (updatedAvatars && updatedAvatars.length > 0) {
+        // Nếu có avatar mới, thêm vào danh sách và chọn nó
+        const newAvatar = data.avatarUrl;
+        setAvatars(updatedAvatars);
+        setSelectedAvatar(newAvatar);
+        toast.success("Tải lên ảnh đại diện thành công");
       } else {
-        toast.error('Tải lên ảnh đại diện thất bại');
+        toast.error("Không thể tải ảnh đại diện, vui lòng thử lại");
       }
     } catch (error) {
-      console.error('Lỗi khi tải lên avatar:', error);
-      toast.error('Đã xảy ra lỗi khi tải lên avatar');
+      console.error("Lỗi khi tải lên avatar:", error);
+      toast.error("Đã xảy ra lỗi khi tải lên avatar");
     } finally {
       setIsUploading(false);
     }
@@ -261,23 +258,33 @@ const ProfileModal = () => {
   // Xử lý khi lưu avatar đã chọn
   const handleSaveAvatar = async () => {
     if (!selectedAvatar) {
-      toast.error('Vui lòng chọn một ảnh đại diện');
+      toast.error("Vui lòng chọn một ảnh đại diện");
       return;
     }
 
     try {
       setIsUploading(true);
-      const result = await updatePrimaryAvatar(selectedAvatar);
-      
-      if (result.success) {
-        toast.success('Cập nhật ảnh đại diện thành công');
+
+      // Gọi API thông qua userService
+      await userService.updatePrimaryAvatar(user._id, selectedAvatar);
+
+      // Cập nhật state của user trong authStore
+      useAuthStore.setState((state) => ({
+        user: {
+          ...state.user,
+          primary_avatar: selectedAvatar,
+        },
+      }));
+
+      toast.success("Cập nhật ảnh đại diện thành công");
+
+      // Chuyển về màn hình xem
+      setTimeout(() => {
         handleBackToView();
-      } else {
-        toast.error(result.message || 'Cập nhật ảnh đại diện thất bại');
-      }
+      }, 300);
     } catch (error) {
-      console.error('Lỗi khi cập nhật avatar:', error);
-      toast.error('Đã xảy ra lỗi khi cập nhật avatar');
+      console.error("Lỗi khi cập nhật avatar:", error);
+      toast.error("Đã xảy ra lỗi khi cập nhật avatar");
     } finally {
       setIsUploading(false);
     }
@@ -289,15 +296,28 @@ const ProfileModal = () => {
       <div className="flex items-center justify-center w-full">
         <label className="flex flex-col w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
           <div className="flex flex-col items-center justify-center pt-5 pb-6">
-            <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+            <svg
+              className="w-10 h-10 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+              ></path>
             </svg>
-            <p className="text-sm text-gray-500 mt-2">Kéo thả hoặc nhấn để tải lên</p>
-            <p className="text-xs text-gray-500">PNG, JPG (Tối đa 5MB)</p>
+            <p className="text-sm text-gray-500 mt-2">
+              Kéo thả hoặc nhấn để tải lên
+            </p>
+            <p className="text-xs text-gray-500">PNG, JPG (Tối đa 10MB)</p>
           </div>
-          <input 
-            type="file" 
-            className="hidden" 
+          <input
+            type="file"
+            className="hidden"
             accept="image/*"
             onChange={onFileSelect}
             disabled={isUploading}
@@ -311,21 +331,34 @@ const ProfileModal = () => {
   const AvatarSelectionGrid = ({ avatars, selectedAvatar, onSelect }) => (
     <div className="grid grid-cols-4 gap-4 mt-4">
       {avatars.map((avatar, index) => (
-        <div 
+        <div
           key={`avatar-${index}`}
-          className={`relative rounded-lg overflow-hidden cursor-pointer ${selectedAvatar === avatar ? 'ring-2 ring-blue-500' : ''}`}
+          className={`relative rounded-lg overflow-hidden cursor-pointer ${
+            selectedAvatar === avatar ? "ring-2 ring-blue-500" : ""
+          }`}
           onClick={() => onSelect(avatar)}
         >
-          <img 
-            src={avatar} 
-            alt={`Avatar ${index + 1}`} 
+          <img
+            src={avatar}
+            alt={`Avatar ${index + 1}`}
             className="w-full h-24 object-cover"
           />
           {selectedAvatar === avatar && (
             <div className="absolute inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center">
               <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center">
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                <svg
+                  className="w-4 h-4 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M5 13l4 4L19 7"
+                  ></path>
                 </svg>
               </div>
             </div>
@@ -338,12 +371,24 @@ const ProfileModal = () => {
   if (!isProfileViewModeOpen) return null;
 
   return (
-    <dialog ref={modalRef} className="modal profile-modal" onClick={handleModalBackdropClick}>
+    <dialog
+      ref={modalRef}
+      className="modal profile-modal"
+      onClick={handleModalBackdropClick}
+    >
       <div className="modal-box profile-modal-box max-w-3xl p-0 bg-white">
         <div className="profile-mode-container">
-          <div className={`profile-mode-wrapper ${slideDirection ? `${slideDirection}-exit-active` : ""}`}>
+          <div
+            className={`profile-mode-wrapper ${
+              slideDirection ? `${slideDirection}-exit-active` : ""
+            }`}
+          >
             {(mode === "view" || isTransitioning) && (
-              <div className={`profile-mode ${isTransitioning && mode !== "view" ? "absolute inset-0" : ""}`}>
+              <div
+                className={`profile-mode ${
+                  isTransitioning && mode !== "view" ? "absolute inset-0" : ""
+                }`}
+              >
                 <ProfileViewMode
                   contentClasses=""
                   user={user}
@@ -355,9 +400,14 @@ const ProfileModal = () => {
                 />
               </div>
             )}
-            
-            {(mode === "edit" || (isTransitioning && (mode === "view" || mode === "avatar"))) && (
-              <div className={`profile-mode ${isTransitioning && mode !== "edit" ? "absolute inset-0" : ""}`}>
+
+            {(mode === "edit" ||
+              (isTransitioning && (mode === "view" || mode === "avatar"))) && (
+              <div
+                className={`profile-mode ${
+                  isTransitioning && mode !== "edit" ? "absolute inset-0" : ""
+                }`}
+              >
                 <ProfileEditMode
                   contentClasses=""
                   formData={formData}
@@ -374,7 +424,11 @@ const ProfileModal = () => {
             )}
 
             {(mode === "avatar" || (isTransitioning && mode === "view")) && (
-              <div className={`profile-mode ${isTransitioning && mode !== "avatar" ? "absolute inset-0" : ""}`}>
+              <div
+                className={`profile-mode ${
+                  isTransitioning && mode !== "avatar" ? "absolute inset-0" : ""
+                }`}
+              >
                 <ProfileAvatarMode
                   contentClasses=""
                   avatars={avatars}
