@@ -15,6 +15,7 @@ import useAuthStore from "./stores/authStore";
 import { SocketProvider } from "./context/SocketContext";
 import { ModalProvider } from "./context/ModalContext";
 import UserProfileModal from "./components/user/UserProfileModal";
+import ProfileModal from "./components/user/ProfileModal";
 import socketManager from "./services/SocketManager";
 
 function App() {
@@ -65,6 +66,7 @@ function App() {
 
         {/* Global Modals - Accessible from anywhere in the app */}
         <UserProfileModal />
+        <ProfileModal />
 
         <Routes>
           {/* Public Routes - Chỉ hiển thị khi chưa đăng nhập */}

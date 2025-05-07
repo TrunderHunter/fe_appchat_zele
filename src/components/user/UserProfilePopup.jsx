@@ -36,7 +36,12 @@ const UserProfilePopup = ({ isOpen, onClose }) => {
   const logout = useAuthStore((state) => state.logout);
   const navigate = useNavigate();
   const popupRef = useRef(null);
-  const { openProfileModal } = useModalContext();
+
+  // Sử dụng ModalContext để quản lý modal ProfileViewMode
+  const { 
+    openProfileModal, 
+    openProfileViewModeModal
+  } = useModalContext();
 
   // Đóng popup khi click ra ngoài
   useEffect(() => {
@@ -79,12 +84,18 @@ const UserProfilePopup = ({ isOpen, onClose }) => {
     onClose();
   };
 
+  // Mở ProfileViewMode sử dụng context
+  const handleOpenProfileViewMode = () => {
+    openProfileViewModeModal();
+    onClose(); // Đóng popup menu
+  };
+
   // Nếu popup đóng thì không hiển thị gì
   if (!isOpen) return null;
 
   return (
     <div
-      className="absolute top-16 left-16 bg-white rounded-lg shadow-lg w-64 z-50 border border-gray-200"
+      className="absolute top-16 left-16 bg-white rounded-lg shadow-lg w-64 z-40 border border-gray-200"
       ref={popupRef}
     >
       {/* User info component - đã được tách riêng và memoized */}
@@ -92,8 +103,8 @@ const UserProfilePopup = ({ isOpen, onClose }) => {
 
       <div className="p-2">
         <button
-          className="w-full text-left px-4 py-2 hover:bg-gray-100 rounded flex items-center"
-          onClick={handleOpenProfileModal}
+          className="w-full text-left px-4 py-2 hover:bg-gray-100 rounded flex items-center cursor-pointer"
+          onClick={handleOpenProfileViewMode}
         >
           <span className="flex-1">Hồ sơ của bạn</span>
           <ArrowUpRight size={16} className="text-gray-500" />

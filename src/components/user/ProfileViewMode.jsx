@@ -7,7 +7,7 @@ const ProfileViewMode = ({
   defaultAvatar,
   formatBirthday,
   handleSwitchToAvatar,
-  handleSwitchToEdit,
+  handleSwitchToEdit, // Sử dụng prop này thay vì context
   handleClose,
 }) => {
   // Component InfoItem để hiển thị từng thông tin người dùng
@@ -75,7 +75,7 @@ const ProfileViewMode = ({
           {user?.name || "Người dùng"}
           <button
             className="text-blue-500 hover:text-blue-700"
-            onClick={handleSwitchToEdit}
+            onClick={handleSwitchToEdit} // Thay đổi từ openProfileEditModeModal sang handleSwitchToEdit
           >
             <Edit2 size={16} />
           </button>
@@ -106,7 +106,7 @@ const ProfileViewMode = ({
       <div className="flex justify-center p-4 border-t">
         <button
           className="btn btn-primary flex items-center gap-2 px-6"
-          onClick={handleSwitchToEdit}
+          onClick={handleSwitchToEdit} // Thay đổi từ openProfileEditModeModal sang handleSwitchToEdit
         >
           <span>Cập nhật</span>
         </button>
