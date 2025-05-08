@@ -1,4 +1,11 @@
-import { Bell, BellOff, MoveRight, Clock, File, ThumbsUp } from "lucide-react";
+import {
+  MdOutlineNotifications,
+  MdOutlineNotificationsOff,
+  MdChevronRight,
+  MdOutlineAccessTime,
+  MdOutlineInsertDriveFile,
+  MdThumbUp,
+} from "react-icons/md";
 
 const ConversationInfoPanel = ({ user, onClose }) => {
   return (
@@ -10,7 +17,7 @@ const ConversationInfoPanel = ({ user, onClose }) => {
           onClick={onClose}
           className="p-1 hover:bg-gray-100 rounded-full"
         >
-          <MoveRight size={18} />
+          <MdChevronRight size={18} />
         </button>
       </div>
 
@@ -38,14 +45,14 @@ const ConversationInfoPanel = ({ user, onClose }) => {
         <div className="flex justify-around p-2 border-b border-gray-200">
           <div className="flex flex-col items-center">
             <button className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full">
-              <Bell size={20} className="text-gray-600" />
+              <MdOutlineNotifications size={20} className="text-gray-600" />
             </button>
             <span className="text-xs mt-1">Thông báo</span>
           </div>
 
           <div className="flex flex-col items-center">
             <button className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full">
-              <Clock size={20} className="text-gray-600" />
+              <MdOutlineAccessTime size={20} className="text-gray-600" />
             </button>
             <span className="text-xs mt-1">Đặt giờ</span>
           </div>
@@ -79,7 +86,7 @@ const ConversationInfoPanel = ({ user, onClose }) => {
           <div className="space-y-2">
             <div className="flex items-center p-2 hover:bg-gray-100 rounded">
               <div className="p-2 bg-gray-200 rounded mr-2">
-                <File size={20} className="text-gray-600" />
+                <MdOutlineInsertDriveFile size={20} className="text-gray-600" />
               </div>
               <div>
                 <p className="text-sm font-medium">FE_AppChat_Zele.rar</p>
@@ -92,7 +99,10 @@ const ConversationInfoPanel = ({ user, onClose }) => {
         {/* Custom actions */}
         <div className="p-4">
           <button className="flex items-center p-2 hover:bg-gray-100 rounded w-full">
-            <BellOff className="mr-3 text-gray-600" size={20} />
+            <MdOutlineNotificationsOff
+              className="mr-3 text-gray-600"
+              size={20}
+            />
             <span>Tắt thông báo</span>
           </button>
 

@@ -1,26 +1,29 @@
 import { useState, useEffect, useRef } from "react";
 import {
-  Phone,
-  Video,
-  Info,
-  Image,
-  Smile,
-  Paperclip,
-  Send,
-  ThumbsUp,
-} from "lucide-react";
+  MdPhone,
+  MdVideoCall,
+  MdInfo,
+  MdImage,
+  MdOutlineEmojiEmotions,
+  MdAttachFile,
+  MdSend,
+  MdThumbUp,
+} from "react-icons/md";
 import MessageBubble from "./MessageBubble";
 import ConversationInfoPanel from "./ConversationInfoPanel";
 import UserProfileModal from "../user/UserProfileModal";
+import GroupInfoModal from "../group/GroupInfoModal";
 import useConversationStore from "../../stores/conversationStore";
 import useAuthStore from "../../stores/authStore";
 import { toast } from "react-hot-toast";
 import socketManager from "../../services/SocketManager";
+import useGroupStore from "../../stores/groupStore";
 
 const ChatWindow = ({ conversation }) => {
   const [newMessage, setNewMessage] = useState("");
   const [showInfoPanel, setShowInfoPanel] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
+  const [showGroupModal, setShowGroupModal] = useState(false);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -28,6 +31,7 @@ const ChatWindow = ({ conversation }) => {
   const lastConversationIdRef = useRef(null);
 
   const { user } = useAuthStore();
+  const { fetchGroupDetails } = useGroupStore();
   const {
     currentMessages,
     currentConversation,
@@ -36,7 +40,6 @@ const ChatWindow = ({ conversation }) => {
     setCurrentConversation,
   } = useConversationStore();
 
-  // Theo dõi khi prop conversation thay đổi để cập nhật cuộc trò chuyện hiện tại
   useEffect(() => {
     const loadConversation = async () => {
       if (
@@ -44,7 +47,6 @@ const ChatWindow = ({ conversation }) => {
         (!lastConversationIdRef.current ||
           lastConversationIdRef.current !== conversation._id)
       ) {
-        // Lưu ID cuộc trò chuyện hiện tại để tránh gọi lại không cần thiết
         lastConversationIdRef.current = conversation._id;
 
         console.log("ChatWindow: Loading conversation", conversation._id);
@@ -57,17 +59,15 @@ const ChatWindow = ({ conversation }) => {
     };
 
     loadConversation();
-  }, [conversation, setCurrentConversation]); // Bỏ currentConversation khỏi dependencies
+  }, [conversation, setCurrentConversation]);
 
   useEffect(() => {
-    // Kiểm tra kết nối socket khi component mount
     const socket = socketManager.getSocket();
     if (socket && !socketManager.isSocketConnected()) {
       console.log("ChatWindow: Socket not properly connected");
     }
   }, []);
 
-  // Chỉ log khi số lượng tin nhắn thay đổi đáng kể
   useEffect(() => {
     const msgCount = currentMessages.length;
     if (msgCount > 0 && msgCount % 10 === 0) {
@@ -75,7 +75,6 @@ const ChatWindow = ({ conversation }) => {
     }
   }, [currentMessages]);
 
-  // Scroll đến tin nhắn mới nhất khi danh sách tin nhắn thay đổi
   useEffect(() => {
     scrollToBottom();
   }, [currentMessages]);
@@ -93,18 +92,15 @@ const ChatWindow = ({ conversation }) => {
 
       console.log("ChatWindow: Sending message to", currentConversation?._id);
 
-      // Gửi tin nhắn với file đính kèm nếu có
       const result = await sendMessage(newMessage, selectedFile);
 
       if (result.success) {
         console.log("ChatWindow: Message sent successfully", result.message);
       }
 
-      // Reset form sau khi gửi
       setNewMessage("");
       setSelectedFile(null);
 
-      // Scroll đến tin nhắn mới nhất
       setTimeout(scrollToBottom, 100);
     } catch (error) {
       console.error("ChatWindow: Error sending message", error);
@@ -117,7 +113,6 @@ const ChatWindow = ({ conversation }) => {
   const handleFileSelect = (e) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      // Kiểm tra kích thước file (10MB)
       if (file.size > 10 * 1024 * 1024) {
         toast.error("Kích thước file không được vượt quá 10MB");
         return;
@@ -126,7 +121,16 @@ const ChatWindow = ({ conversation }) => {
     }
   };
 
-  // Lấy thông tin người nhận
+  const handleAvatarClick = async () => {
+    if (currentConversation?.type === "group") {
+      // Fetch group details nếu là nhóm
+      await fetchGroupDetails(currentConversation.group_id);
+      setShowGroupModal(true);
+    } else {
+      setShowUserModal(true);
+    }
+  };
+
   const getRecipientInfo = () => {
     if (!currentConversation || !user)
       return { name: "Người dùng", avatar: null, isActive: false };
@@ -136,10 +140,11 @@ const ChatWindow = ({ conversation }) => {
         name: currentConversation.name || "Nhóm",
         avatar: currentConversation.avatar,
         isActive: false,
+        isGroup: true,
+        groupId: currentConversation.group_id,
       };
     }
 
-    // Tìm thông tin của người tham gia khác (không phải người dùng hiện tại)
     const otherParticipant = currentConversation.participants?.find(
       (p) => p.user_id !== user._id
     );
@@ -150,16 +155,15 @@ const ChatWindow = ({ conversation }) => {
     return {
       name: otherParticipant.name || "Người dùng",
       avatar: otherParticipant.primary_avatar,
-      isActive: Math.random() > 0.5, // Chỉ để mô phỏng, sẽ cập nhật khi có dữ liệu thực
-      phone: "+84 332 732 933", // Dữ liệu mẫu, cần thay thế bằng dữ liệu thực
-      dob: "02 tháng 09, 1971", // Dữ liệu mẫu, cần thay thế bằng dữ liệu thực
-      gender: "Nữ", // Dữ liệu mẫu, cần thay thế bằng dữ liệu thực
+      isActive: Math.random() > 0.5,
+      phone: "+84 332 732 933",
+      dob: "02 tháng 09, 1971",
+      gender: "Nữ",
     };
   };
 
   const recipient = getRecipientInfo();
 
-  // Tạo placeholder cho input tin nhắn
   const getInputPlaceholder = () => {
     if (isLoadingMessages) return "Đang xử lý...";
     if (currentConversation?.type === "group")
@@ -167,7 +171,6 @@ const ChatWindow = ({ conversation }) => {
     return `Nhập tin nhắn đến ${recipient.name}`;
   };
 
-  // Nếu không có currentConversation, hiển thị thông báo
   if (!currentConversation) {
     return (
       <div className="flex flex-col items-center justify-center h-full bg-gray-50">
@@ -184,12 +187,11 @@ const ChatWindow = ({ conversation }) => {
   return (
     <div className="flex flex-1 h-full w-full">
       <div className="flex flex-col flex-1 h-full overflow-hidden">
-        {/* Header */}
         <div className="px-4 py-2 flex justify-between items-center border-b border-gray-200 flex-shrink-0">
           <div className="flex items-center">
             <div
               className="w-10 h-10 rounded-full overflow-hidden mr-3 cursor-pointer"
-              onClick={() => setShowUserModal(true)}
+              onClick={handleAvatarClick}
             >
               <img
                 src={
@@ -212,10 +214,10 @@ const ChatWindow = ({ conversation }) => {
 
           <div className="flex items-center gap-4">
             <button className="text-gray-600 hover:bg-gray-100 p-2 rounded-full">
-              <Phone size={20} />
+              <MdPhone size={20} />
             </button>
             <button className="text-gray-600 hover:bg-gray-100 p-2 rounded-full">
-              <Video size={20} />
+              <MdVideoCall size={20} />
             </button>
             <button
               className={`text-gray-600 hover:bg-gray-100 p-2 rounded-full ${
@@ -223,12 +225,11 @@ const ChatWindow = ({ conversation }) => {
               }`}
               onClick={() => setShowInfoPanel(!showInfoPanel)}
             >
-              <Info size={20} />
+              <MdInfo size={20} />
             </button>
           </div>
         </div>
 
-        {/* Messages */}
         <div className="flex-1 p-4 overflow-y-auto bg-white">
           <div className="flex flex-col">
             {isLoadingMessages && currentMessages.length === 0 ? (
@@ -277,7 +278,6 @@ const ChatWindow = ({ conversation }) => {
           </div>
         </div>
 
-        {/* File preview */}
         {selectedFile && (
           <div className="px-4 py-2 bg-gray-100 flex items-center justify-between">
             <div className="flex items-center">
@@ -297,7 +297,6 @@ const ChatWindow = ({ conversation }) => {
           </div>
         )}
 
-        {/* Input area */}
         <div className="px-4 py-2 border-t border-gray-200 bg-white flex-shrink-0">
           <form onSubmit={handleSendMessage} className="flex items-center">
             <div className="flex items-center gap-2 mr-2">
@@ -306,7 +305,7 @@ const ChatWindow = ({ conversation }) => {
                 className="text-gray-500 hover:bg-gray-100 p-2 rounded-full"
                 onClick={() => fileInputRef.current?.click()}
               >
-                <Image size={20} />
+                <MdImage size={20} />
               </button>
               <input
                 type="file"
@@ -319,7 +318,7 @@ const ChatWindow = ({ conversation }) => {
                 type="button"
                 className="text-gray-500 hover:bg-gray-100 p-2 rounded-full"
               >
-                <Paperclip size={20} />
+                <MdAttachFile size={20} />
               </button>
             </div>
 
@@ -336,7 +335,7 @@ const ChatWindow = ({ conversation }) => {
                 type="button"
                 className="absolute right-3 top-2 text-gray-500"
               >
-                <Smile size={20} />
+                <MdOutlineEmojiEmotions size={20} />
               </button>
             </div>
 
@@ -352,16 +351,15 @@ const ChatWindow = ({ conversation }) => {
               {isLoadingMessages || isUploading ? (
                 <span className="loading loading-spinner loading-sm"></span>
               ) : newMessage.trim() || selectedFile ? (
-                <Send size={20} />
+                <MdSend size={20} />
               ) : (
-                <ThumbsUp size={20} />
+                <MdThumbUp size={20} />
               )}
             </button>
           </form>
         </div>
       </div>
 
-      {/* User Info Panel */}
       {showInfoPanel && (
         <ConversationInfoPanel
           user={{
@@ -374,17 +372,41 @@ const ChatWindow = ({ conversation }) => {
         />
       )}
 
-      {/* Using the separate UserProfileModal component */}
       <UserProfileModal
         isOpen={showUserModal}
         onClose={() => setShowUserModal(false)}
         recipient={recipient}
       />
+
+      <GroupInfoModal
+        isOpen={showGroupModal}
+        onClose={() => setShowGroupModal(false)}
+        group={
+          currentConversation?.type === "group"
+            ? {
+                _id: currentConversation?.group_id,
+                name: currentConversation?.name,
+                avatar: currentConversation?.avatar,
+                members:
+                  currentConversation?.participants?.map((p) => ({
+                    user:
+                      typeof p.user_id === "object"
+                        ? p.user_id
+                        : { _id: p.user_id },
+                    role: p.role || "member",
+                  })) || [],
+                description: currentConversation?.description || "",
+                is_public: currentConversation?.is_public || false,
+                created_at: currentConversation?.created_at,
+                updated_at: currentConversation?.updated_at,
+              }
+            : null
+        }
+      />
     </div>
   );
 };
 
-// Hàm định dạng thời gian tin nhắn
 const formatMessageTime = (timestamp) => {
   if (!timestamp) return "";
 

@@ -4,8 +4,8 @@ import ConversationItem from "./ConversationItem";
 import useConversationStore from "../../stores/conversationStore";
 import useAuthStore from "../../stores/authStore";
 import { toast } from "react-hot-toast";
+import useGroupStore from "../../stores/groupStore";
 
-// Đặt các hàm tiện ích ra ngoài component để tránh tạo lại mỗi lần render
 // Hàm lấy tên của cuộc trò chuyện
 const getConversationName = (conversation, currentUserId) => {
   // Nếu là nhóm và đã có tên
@@ -93,7 +93,7 @@ const formatMessageTime = (timestamp) => {
   }
 };
 
-// Hàm kiểm tra xem người tham gia có đang hoạt động không
+// Hàm kiểm tra xem người tham gia có đang hoạt động không (tam thời giả lập)
 const isParticipantActive = (conversation, currentUserId) => {
   // Đây chỉ là placeholder, sẽ được thay thế bằng logic từ online status thực tế
   return Math.random() > 0.5; // Giả lập status ngẫu nhiên
@@ -103,12 +103,14 @@ const ConversationList = memo(
   ({ onSelectConversation, selectedConversation }) => {
     const [activeTab, setActiveTab] = useState("all");
     const { user } = useAuthStore();
+    const { fetchGroupDetails } = useGroupStore();
 
     // Sử dụng selectors cụ thể để tránh re-render khi các phần khác của store thay đổi
     const conversations = useConversationStore((state) => state.conversations);
     const fetchConversations = useConversationStore(
       (state) => state.fetchConversations
     );
+
     const setCurrentConversation = useConversationStore(
       (state) => state.setCurrentConversation
     );
@@ -117,19 +119,19 @@ const ConversationList = memo(
     );
     const error = useConversationStore((state) => state.error);
 
+    const loadConversations = async () => {
+      try {
+        await fetchConversations();
+      } catch (err) {
+        // Bỏ qua lỗi 404 (không có cuộc trò chuyện)
+        if (!(err.response && err.response.status === 404)) {
+          console.error("Error loading conversations:", err);
+        }
+      }
+    };
+
     // Fetch conversations khi component mount
     useEffect(() => {
-      const loadConversations = async () => {
-        try {
-          await fetchConversations();
-        } catch (err) {
-          // Bỏ qua lỗi 404 (không có cuộc trò chuyện)
-          if (!(err.response && err.response.status === 404)) {
-            console.error("Error loading conversations:", err);
-          }
-        }
-      };
-
       loadConversations();
     }, [fetchConversations]);
 

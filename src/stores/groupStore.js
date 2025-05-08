@@ -86,6 +86,10 @@ const useGroupStore = create(
 
       // Lấy chi tiết nhóm
       fetchGroupDetails: async (groupId) => {
+        if (!groupId) {
+          set({ error: "Group ID is required" });
+          return { success: false };
+        }
         set({ isLoading: true, error: null });
         try {
           const groupDetails = await groupService.getGroupById(groupId);
