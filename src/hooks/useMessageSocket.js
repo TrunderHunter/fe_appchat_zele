@@ -89,10 +89,7 @@ const useMessageSocket = () => {
 
     // Lắng nghe khi có tin nhắn cuối cùng được cập nhật
     socket.on("updateLastMessage", (conversation) => {
-      console.log(
-        "🔔 Updating last message for conversation:",
-        conversation._id
-      );
+      console.log("🔔 Updating last message for conversation:", conversation);
       updateLastMessage(conversation._id, conversation.last_message);
     });
 

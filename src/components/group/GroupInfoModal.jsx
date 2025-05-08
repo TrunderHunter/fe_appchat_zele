@@ -28,8 +28,6 @@ const GroupInfoModal = ({ isOpen, onClose, group }) => {
   // Use currentGroup if available, otherwise use the group prop
   const groupData = currentGroup || group;
 
-  console.log("Group data:", groupData);
-
   // Xử lý rời nhóm
   const handleLeaveGroup = async () => {
     if (!groupData?._id) return;

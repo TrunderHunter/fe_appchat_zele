@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import authService from "../services/authService";
 import { persist } from "zustand/middleware";
+import useConversationStore from "./conversationStore";
 
 const useAuthStore = create(
   persist(
@@ -243,6 +244,8 @@ const useAuthStore = create(
         set({ isLoading: true });
         try {
           await authService.logout();
+          // Reset conversation store để tránh dữ liệu cũ còn lưu lại sau khi đăng nhập lại
+          useConversationStore.getState().resetConversationStore();
 
           set({
             user: null,

@@ -11,7 +11,6 @@ class SocketManager {
     this.userId = null;
     this.heartbeatInterval = null;
     this.connectionAttempts = 0;
-    this.groupEventHandlers = {};
   }
 
   // Khởi tạo kết nối socket
@@ -123,9 +122,6 @@ class SocketManager {
       this.setupHeartbeat(userId);
     });
 
-    // Đăng ký listeners cho các sự kiện liên quan đến nhóm
-    this.registerGroupEventHandlers();
-
     return this.socket;
   }
 
@@ -168,107 +164,6 @@ class SocketManager {
     return () => {
       this.listeners.delete("connectionChange");
     };
-  }
-
-  // Đăng ký các handlers cho các sự kiện liên quan đến nhóm
-  registerGroupEventHandlers() {
-    if (!this.socket) return;
-
-    // Sự kiện khi có nhóm mới được tạo
-    this.socket.on("newGroupCreated", (data) => {
-      if (this.groupEventHandlers.onNewGroupCreated) {
-        this.groupEventHandlers.onNewGroupCreated(data);
-      }
-    });
-
-    // Sự kiện khi thành viên mới được thêm vào nhóm
-    this.socket.on("memberAddedToGroup", (data) => {
-      if (this.groupEventHandlers.onMemberAddedToGroup) {
-        this.groupEventHandlers.onMemberAddedToGroup(data);
-      }
-    });
-
-    // Sự kiện khi người dùng được thêm vào nhóm
-    this.socket.on("addedToGroup", (data) => {
-      if (this.groupEventHandlers.onAddedToGroup) {
-        this.groupEventHandlers.onAddedToGroup(data);
-      }
-    });
-
-    // Sự kiện khi thành viên bị xóa khỏi nhóm
-    this.socket.on("memberRemovedFromGroup", (data) => {
-      if (this.groupEventHandlers.onMemberRemovedFromGroup) {
-        this.groupEventHandlers.onMemberRemovedFromGroup(data);
-      }
-    });
-
-    // Sự kiện khi người dùng bị xóa khỏi nhóm
-    this.socket.on("removedFromGroup", (data) => {
-      if (this.groupEventHandlers.onRemovedFromGroup) {
-        this.groupEventHandlers.onRemovedFromGroup(data);
-      }
-    });
-
-    // Sự kiện khi vai trò thành viên thay đổi
-    this.socket.on("memberRoleChanged", (data) => {
-      if (this.groupEventHandlers.onMemberRoleChanged) {
-        this.groupEventHandlers.onMemberRoleChanged(data);
-      }
-    });
-
-    // Sự kiện khi thông tin nhóm được cập nhật
-    this.socket.on("groupInfoUpdated", (data) => {
-      if (this.groupEventHandlers.onGroupInfoUpdated) {
-        this.groupEventHandlers.onGroupInfoUpdated(data);
-      }
-    });
-
-    // Sự kiện khi người dùng tham gia nhóm bằng link mời
-    this.socket.on("memberJoinedViaLink", (data) => {
-      if (this.groupEventHandlers.onMemberJoinedViaLink) {
-        this.groupEventHandlers.onMemberJoinedViaLink(data);
-      }
-    });
-
-    // Sự kiện khi bạn tham gia nhóm bằng link mời
-    this.socket.on("joinedGroupViaLink", (data) => {
-      if (this.groupEventHandlers.onJoinedGroupViaLink) {
-        this.groupEventHandlers.onJoinedGroupViaLink(data);
-      }
-    });
-
-    // Sự kiện khi trạng thái link mời được cập nhật
-    this.socket.on("inviteLinkStatusUpdated", (data) => {
-      if (this.groupEventHandlers.onInviteLinkStatusUpdated) {
-        this.groupEventHandlers.onInviteLinkStatusUpdated(data);
-      }
-    });
-
-    // Sự kiện khi link mời được tạo lại
-    this.socket.on("inviteLinkRegenerated", (data) => {
-      if (this.groupEventHandlers.onInviteLinkRegenerated) {
-        this.groupEventHandlers.onInviteLinkRegenerated(data);
-      }
-    });
-
-    // Sự kiện khi nhóm bị xóa
-    this.socket.on("groupDeleted", (data) => {
-      if (this.groupEventHandlers.onGroupDeleted) {
-        this.groupEventHandlers.onGroupDeleted(data);
-      }
-    });
-  }
-
-  // Đăng ký handler cho sự kiện nhóm
-  setGroupEventHandler(event, callback) {
-    this.groupEventHandlers[event] = callback;
-  }
-
-  // Hủy đăng ký handler cho sự kiện nhóm
-  clearGroupEventHandler(event) {
-    if (this.groupEventHandlers[event]) {
-      delete this.groupEventHandlers[event];
-    }
   }
 
   // Ngắt kết nối socket

@@ -302,154 +302,61 @@ const useConversationStore = create(
 
       // Thêm tin nhắn mới vào cuộc trò chuyện hiện tại (được gọi khi nhận tin nhắn qua socket)
       addNewMessage: (message) => {
-        console.log("addNewMessage called with:", message);
-
         const { currentConversation, currentMessages, conversations } = get();
-        const userId = useAuthStore.getState().user?._id;
-
-        // Thêm log chi tiết để debug
-        console.log("Current conversation:", currentConversation?._id);
-        console.log("Message conversation_id:", message.conversation_id);
-        console.log(
-          "Message receiver_id:",
-          typeof message.receiver_id === "object"
-            ? message.receiver_id?._id
-            : message.receiver_id
-        );
-        console.log(
-          "Message sender_id:",
-          typeof message.sender_id === "object"
-            ? message.sender_id?._id
-            : message.sender_id
-        );
-
-        // Chức năng này sẽ kiểm tra ID của tin nhắn có tồn tại trong currentMessages chưa
-        const messageExists = (msgId) => {
-          return currentMessages.some((msg) => msg._id === msgId);
-        };
-
-        // Kiểm tra xem đây có phải là tin nhắn mới cho cuộc trò chuyện hiện tại không
-        if (currentConversation) {
-          // Lấy các ID liên quan để kiểm tra
-          const receiverId =
-            typeof message.receiver_id === "object"
-              ? message.receiver_id?._id
-              : message.receiver_id;
-
-          const senderId =
-            typeof message.sender_id === "object"
-              ? message.sender_id?._id
-              : message.sender_id;
-
-          // Kiểm tra nhiều trường hợp để xác định tin nhắn thuộc cuộc trò chuyện hiện tại
-          const conversationMatches =
-            // Trường hợp 1: conversation_id trùng khớp trực tiếp
-            (message.conversation_id &&
-              message.conversation_id === currentConversation._id) ||
-            // Trường hợp 2: Tin nhắn cá nhân - so sánh receiver_id với conversation_id
-            (receiverId && receiverId === currentConversation._id) ||
-            // Trường hợp 3: Tin nhắn cá nhân - đây là cuộc trò chuyện giữa sender và receiver
-            (currentConversation.type === "personal" &&
-              currentConversation.participants &&
-              currentConversation.participants.length === 2 &&
-              ((senderId &&
-                currentConversation.participants.some(
-                  (p) => p.user_id === senderId
-                )) ||
-                (receiverId &&
-                  currentConversation.participants.some(
-                    (p) => p.user_id === receiverId
-                  ))));
-
-          console.log("Conversation matches?", conversationMatches);
-
-          if (conversationMatches) {
-            // Chỉ thêm tin nhắn vào nếu nó chưa tồn tại
-            if (!messageExists(message._id)) {
-              console.log(
-                "✅ Adding new message to current conversation",
-                message
-              );
-
-              // Force UI update bằng cách tạo mảng mới
-              set((state) => ({
-                currentMessages: [...state.currentMessages, message],
-              }));
-
-              // Đảm bảo tin nhắn được thêm vào cuối danh sách, sau đó thông báo cho UI cập nhật
-              setTimeout(() => {
-                console.log(
-                  "Current messages length after update:",
-                  get().currentMessages.length
-                );
-              }, 100);
-            } else {
-              console.log(
-                "Message already exists in currentMessages, not adding duplicate"
-              );
-            }
-          } else {
-            console.log("Message does not match current conversation");
-          }
-        } else {
-          console.log("No current conversation selected");
+        
+        // Nếu không có message hợp lệ
+        if (!message || !message._id) {
+          console.warn("Invalid message object received", message);
+          return;
         }
 
-        // Luôn cập nhật danh sách cuộc trò chuyện trong store để hiển thị tin nhắn mới nhất
-        set((state) => {
-          // Tìm cuộc trò chuyện cần cập nhật
-          const updatedConversations = state.conversations.map((conv) => {
-            const receiverId =
-              typeof message.receiver_id === "object"
-                ? message.receiver_id?._id
-                : message.receiver_id;
+        console.log("Adding new message:", message);
 
-            const senderId =
-              typeof message.sender_id === "object"
-                ? message.sender_id?._id
-                : message.sender_id;
-
-            const conversationMatches =
-              // Match theo conversation_id
-              (message.conversation_id &&
-                conv._id === message.conversation_id) ||
-              // Hoặc match theo receiver_id
-              (receiverId && conv._id === receiverId) ||
-              // Hoặc đây là cuộc trò chuyện cá nhân giữa người gửi và người nhận
-              (conv.type === "personal" &&
-                conv.participants &&
-                conv.participants.length === 2 &&
-                conv.participants.some(
-                  (p) => p.user_id === senderId || p.user_id === receiverId
-                ));
-
-            return conversationMatches
-              ? { ...conv, last_message: message }
-              : conv;
-          });
-
-          // Nếu không tìm thấy cuộc trò chuyện phù hợp, có thể cần tải lại danh sách
-          const conversationFound = updatedConversations.some(
-            (conv) =>
-              (message.conversation_id &&
-                conv._id === message.conversation_id) ||
-              (typeof message.receiver_id === "object" &&
-                message.receiver_id &&
-                conv._id === message.receiver_id._id) ||
-              (message.receiver_id && conv._id === message.receiver_id)
-          );
-
-          if (!conversationFound) {
-            console.log(
-              "Conversation not found in store, might need to refresh conversations list"
-            );
-            // fetchConversations(); // Có thể gọi ở đây, nhưng cẩn thận với vòng lặp vô hạn
+        // 1. Thêm tin nhắn vào cuộc trò chuyện hiện tại nếu đúng conversation
+        if (currentConversation && 
+            ((currentConversation.type === "personal" && 
+              (message.sender_id._id === currentConversation.participants[0].user_id || 
+               message.sender_id._id === currentConversation.participants[1].user_id) && 
+              (message.receiver_id._id === currentConversation.participants[0].user_id || 
+               message.receiver_id._id === currentConversation.participants[1].user_id)) || 
+             (currentConversation.type === "group" && 
+              currentConversation._id === message.receiver_id._id))) {
+          
+          // Kiểm tra xem tin nhắn đã có trong danh sách chưa
+          const messageExists = currentMessages.some(msg => msg._id === message._id);
+          
+          if (!messageExists) {
+            set({
+              currentMessages: [...currentMessages, message]
+            });
           }
+        }
 
-          return {
-            conversations: updatedConversations,
-          };
-        });
+        // 2. Cập nhật tin nhắn cuối cùng trong danh sách cuộc trò chuyện
+        set(state => ({
+          conversations: state.conversations.map(conv => {
+            // Với cuộc trò chuyện cá nhân
+            if (conv.type === "personal") {
+              const participantIds = conv.participants.map(p => p.user_id);
+              // Kiểm tra xem tin nhắn thuộc về cuộc trò chuyện này không
+              if (participantIds.includes(message.sender_id._id) && 
+                  participantIds.includes(message.receiver_id._id)) {
+                return {
+                  ...conv,
+                  last_message: message
+                };
+              }
+            }
+            // Với cuộc trò chuyện nhóm
+            else if (conv.type === "group" && conv._id === message.receiver_id._id) {
+              return {
+                ...conv,
+                last_message: message
+              };
+            }
+            return conv;
+          })
+        }));
       },
 
       // Cập nhật danh sách cuộc trò chuyện khi có cuộc trò chuyện mới (qua socket)

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import socketManager from "../services/SocketManager";
 import useGroupStore from "../stores/groupStore";
 import useAuthStore from "../stores/authStore";
@@ -9,6 +9,7 @@ import toast from "react-hot-toast";
  * Hook để kết nối các sự kiện socket liên quan đến nhóm với store
  */
 const useGroupSocket = () => {
+  const [isConnected, setIsConnected] = useState(false);
   const { user } = useAuthStore();
   const {
     handleMemberAdded,
@@ -20,14 +21,54 @@ const useGroupSocket = () => {
     handleRemovedFromGroup,
   } = useGroupStore();
 
-  const { addNewConversation } = useConversationStore();
+  const {
+    addNewConversation,
+    updateConversation,
+    updateConversationParticipants,
+  } = useConversationStore();
 
   useEffect(() => {
-    if (!user?._id) return;
+    if (!user) {
+      console.log("useGroupSocket: No user logged in, skipping socket setup");
+      return;
+    }
+
+    console.log(
+      "useGroupSocket: Setting up socket listeners for user",
+      user._id
+    );
+
+    // Lấy socket đã được khởi tạo từ SocketManager
+    const socket = socketManager.getSocket();
+    if (!socket) {
+      console.warn("useGroupSocket: No socket instance available");
+      return;
+    }
+
+    // Kiểm tra trạng thái kết nối
+    setIsConnected(socketManager.isSocketConnected());
+
+    // Theo dõi thay đổi trạng thái kết nối
+    const unsubscribe = socketManager.onConnectionChange((connected) => {
+      console.log("Socket connection status changed:", connected);
+      setIsConnected(connected);
+    });
 
     // Xử lý khi có thành viên mới được thêm vào nhóm
-    socketManager.setGroupEventHandler("onMemberAddedToGroup", (data) => {
+    socket.on("memberAddedToGroup", (data) => {
+      console.log("🔔 Socket event: memberAddedToGroup", data);
       handleMemberAdded(data);
+
+      // Cập nhật conversation nếu có
+      if (data.conversation) {
+        updateConversation(data.conversation);
+        // Cập nhật danh sách người tham gia trong conversation
+        updateConversationParticipants(
+          data.conversation._id,
+          data.group.members
+        );
+      }
+
       toast.info(
         `${
           data.newMember?.user?.name || "Thành viên mới"
@@ -36,10 +77,22 @@ const useGroupSocket = () => {
     });
 
     // Xử lý khi người dùng được thêm vào nhóm
-    socketManager.setGroupEventHandler("onAddedToGroup", (data) => {
+    socket.on("addedToGroup", (data) => {
+      console.log("🔔 Socket event: addedToGroup", data);
       handleAddedToGroup(data);
+
       // Nếu nhóm có conversation_id, thêm conversation mới
-      if (data.group?.conversation_id) {
+      if (data.conversation) {
+        console.log(
+          "Adding new conversation from addedToGroup event:",
+          data.conversation
+        );
+        addNewConversation(data.conversation);
+      } else if (data.group?.conversation_id) {
+        console.log(
+          "Creating conversation object from group data:",
+          data.group
+        );
         addNewConversation({
           _id: data.group.conversation_id,
           name: data.group.name,
@@ -56,18 +109,30 @@ const useGroupSocket = () => {
     });
 
     // Xử lý khi thành viên bị xóa khỏi nhóm
-    socketManager.setGroupEventHandler("onMemberRemovedFromGroup", (data) => {
+    socket.on("memberRemovedFromGroup", (data) => {
+      console.log("🔔 Socket event: memberRemovedFromGroup", data);
       handleMemberRemoved(data);
+
+      // Cập nhật conversation nếu có thông tin group
+      if (data.group && data.group.conversation_id) {
+        updateConversationParticipants(
+          data.group.conversation_id,
+          data.group.members
+        );
+      }
+
       toast.info(`Một thành viên đã bị xóa khỏi nhóm`);
     });
 
     // Xử lý khi người dùng bị xóa khỏi nhóm
-    socketManager.setGroupEventHandler("onRemovedFromGroup", (data) => {
+    socket.on("removedFromGroup", (data) => {
+      console.log("🔔 Socket event: removedFromGroup", data);
       handleRemovedFromGroup(data);
     });
 
     // Xử lý khi vai trò thành viên thay đổi
-    socketManager.setGroupEventHandler("onMemberRoleChanged", (data) => {
+    socket.on("memberRoleChanged", (data) => {
+      console.log("🔔 Socket event: memberRoleChanged", data);
       handleRoleChanged(data);
       toast.info(
         `Vai trò của ${
@@ -77,13 +142,31 @@ const useGroupSocket = () => {
     });
 
     // Xử lý khi thông tin nhóm được cập nhật
-    socketManager.setGroupEventHandler("onGroupInfoUpdated", (data) => {
+    socket.on("groupInfoUpdated", (data) => {
+      console.log("🔔 Socket event: groupInfoUpdated", data);
       handleGroupUpdated(data);
       toast.info("Thông tin nhóm đã được cập nhật");
     });
 
+    // Xử lý khi có sự kiện cập nhật thông tin cuộc trò chuyện
+    socket.on("conversationInfoUpdated", (data) => {
+      console.log("🔔 Socket event: conversationInfoUpdated", data);
+      if (data.conversation) {
+        updateConversation(data.conversation);
+      } else if (data.conversationId) {
+        // Cập nhật thông tin cơ bản nếu không có đầy đủ thông tin conversation
+        updateConversation({
+          _id: data.conversationId,
+          name: data.name,
+          avatar: data.avatar,
+          updated_at: new Date(),
+        });
+      }
+    });
+
     // Xử lý khi nhóm mới được tạo
-    socketManager.setGroupEventHandler("onNewGroupCreated", (data) => {
+    socket.on("newGroupCreated", (data) => {
+      console.log("🔔 Socket event: newGroupCreated", data);
       // Thêm nhóm vào danh sách nếu người dùng là thành viên
       const isMember = data.group?.members?.some(
         (m) => (m.user._id || m.user) === user._id
@@ -91,22 +174,42 @@ const useGroupSocket = () => {
 
       if (isMember) {
         handleAddedToGroup(data);
+
+        // Nếu có thông tin conversation, thêm vào danh sách
+        if (data.conversation) {
+          console.log(
+            "Adding conversation from newGroupCreated event:",
+            data.conversation
+          );
+          addNewConversation(data.conversation);
+        }
+      }
+    });
+
+    // Xử lý khi nhận được sự kiện có cuộc trò chuyện mới
+    socket.on("newConversation", (data) => {
+      console.log("🔔 Socket event: newConversation", data);
+      if (data.conversation) {
+        addNewConversation(data.conversation);
       }
     });
 
     // Xử lý khi nhóm bị xóa
-    socketManager.setGroupEventHandler("onGroupDeleted", (data) => {
+    socket.on("groupDeleted", (data) => {
+      console.log("🔔 Socket event: groupDeleted", data);
       handleGroupDeleted(data);
     });
 
     // Xử lý khi người dùng tham gia nhóm bằng link
-    socketManager.setGroupEventHandler("onJoinedGroupViaLink", (data) => {
+    socket.on("joinedGroupViaLink", (data) => {
+      console.log("🔔 Socket event: joinedGroupViaLink", data);
       handleAddedToGroup(data);
       toast.success(`Bạn đã tham gia nhóm ${data.group?.name}`);
     });
 
     // Xử lý khi có người khác tham gia nhóm bằng link
-    socketManager.setGroupEventHandler("onMemberJoinedViaLink", (data) => {
+    socket.on("memberJoinedViaLink", (data) => {
+      console.log("🔔 Socket event: memberJoinedViaLink", data);
       handleMemberAdded(data);
       toast.info(
         `${
@@ -115,21 +218,54 @@ const useGroupSocket = () => {
       );
     });
 
+    // Xử lý khi trạng thái liên kết mời được cập nhật
+    socket.on("inviteLinkStatusUpdated", (data) => {
+      console.log("🔔 Socket event: inviteLinkStatusUpdated", data);
+      // Có thể thêm xử lý cập nhật trạng thái liên kết mời ở đây
+    });
+
+    // Xử lý khi liên kết mời được tạo lại
+    socket.on("inviteLinkRegenerated", (data) => {
+      console.log("🔔 Socket event: inviteLinkRegenerated", data);
+      // Có thể thêm xử lý cập nhật liên kết mời mới ở đây
+    });
+
+    // Lắng nghe các lỗi từ server
+    socket.on("error", (error) => {
+      console.error("Socket error received:", error);
+      // Chỉ hiển thị lỗi nếu là lỗi quan trọng
+      if (typeof error === "object" && error.message) {
+        if (
+          !error.message.includes("not found") &&
+          !error.message.includes("Không thể tải")
+        ) {
+          toast.error(`Lỗi: ${error.message}`);
+        }
+      }
+    });
+
+    // Cleanup function
     return () => {
-      // Cleanup khi component unmount
-      socketManager.clearGroupEventHandler("onMemberAddedToGroup");
-      socketManager.clearGroupEventHandler("onAddedToGroup");
-      socketManager.clearGroupEventHandler("onMemberRemovedFromGroup");
-      socketManager.clearGroupEventHandler("onRemovedFromGroup");
-      socketManager.clearGroupEventHandler("onMemberRoleChanged");
-      socketManager.clearGroupEventHandler("onGroupInfoUpdated");
-      socketManager.clearGroupEventHandler("onNewGroupCreated");
-      socketManager.clearGroupEventHandler("onGroupDeleted");
-      socketManager.clearGroupEventHandler("onJoinedGroupViaLink");
-      socketManager.clearGroupEventHandler("onMemberJoinedViaLink");
+      console.log("useGroupSocket: Cleaning up socket listeners");
+      socket.off("memberAddedToGroup");
+      socket.off("addedToGroup");
+      socket.off("memberRemovedFromGroup");
+      socket.off("removedFromGroup");
+      socket.off("memberRoleChanged");
+      socket.off("groupInfoUpdated");
+      socket.off("conversationInfoUpdated");
+      socket.off("newGroupCreated");
+      socket.off("groupDeleted");
+      socket.off("joinedGroupViaLink");
+      socket.off("memberJoinedViaLink");
+      socket.off("inviteLinkStatusUpdated");
+      socket.off("inviteLinkRegenerated");
+      socket.off("newConversation");
+      socket.off("error");
+      unsubscribe(); // Hủy đăng ký theo dõi thay đổi trạng thái kết nối
     };
   }, [
-    user?._id,
+    user,
     handleMemberAdded,
     handleMemberRemoved,
     handleRoleChanged,
@@ -138,9 +274,11 @@ const useGroupSocket = () => {
     handleAddedToGroup,
     handleRemovedFromGroup,
     addNewConversation,
+    updateConversation,
+    updateConversationParticipants,
   ]);
 
-  return null;
+  return { isConnected };
 };
 
 export default useGroupSocket;

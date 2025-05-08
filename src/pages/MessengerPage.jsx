@@ -2,8 +2,8 @@ import ConversationList from "../components/chat/ConversationList";
 import ChatWindow from "../components/chat/ChatWindow";
 import SearchBar from "../components/chat/SearchBar";
 import { useState, useEffect } from "react";
-import { useLocation, useSearchParams } from "react-router-dom";
-import useMessageSocket from "../hooks/useMessageSocket";
+import { useSearchParams } from "react-router-dom";
+
 import useConversationStore from "../stores/conversationStore";
 import useGroupStore from "../stores/groupStore";
 import useAuthStore from "../stores/authStore";
@@ -26,9 +26,6 @@ const MessengerPage = () => {
   } = useConversationStore();
 
   const { fetchGroupDetails } = useGroupStore();
-
-  // Kích hoạt hook lắng nghe tin nhắn
-  useMessageSocket();
 
   // Xử lý khi truy cập trực tiếp từ URL (ví dụ: /messages?friend=123 hoặc /messages?group=123)
   useEffect(() => {
