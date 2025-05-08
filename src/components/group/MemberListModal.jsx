@@ -11,14 +11,16 @@ import useAuthStore from "../../stores/authStore";
 import useGroupStore from "../../stores/groupStore";
 import { toast } from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
+import AddMemberModal from "./AddMemberModal";
 
 const MemberListModal = ({ isOpen, onClose, group, onBack }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activePopupMemberId, setActivePopupMemberId] = useState(null);
   const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0 });
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const popupRef = useRef(null);
   const { user } = useAuthStore();
-  const { removeGroupMember, updateGroupMember } = useGroupStore();
+  const { removeMember, changeRole } = useGroupStore();
   const navigate = useNavigate();
 
   // Kiểm tra xem người dùng hiện tại có phải là admin của nhóm không
@@ -63,7 +65,7 @@ const MemberListModal = ({ isOpen, onClose, group, onBack }) => {
     if (!group?._id || !memberId) return;
 
     try {
-      await updateGroupMember(group._id, memberId, { role: "admin" });
+      await changeRole(group._id, memberId, "admin");
       setActivePopupMemberId(null);
       toast.success("Đã cấp quyền quản trị viên");
     } catch (error) {
@@ -81,7 +83,7 @@ const MemberListModal = ({ isOpen, onClose, group, onBack }) => {
         "Bạn có chắc muốn xóa thành viên này khỏi nhóm?"
       );
       if (confirmed) {
-        await removeGroupMember(group._id, memberId);
+        await removeMember(group._id, memberId);
         setActivePopupMemberId(null);
         toast.success("Đã xóa thành viên khỏi nhóm");
       }
@@ -121,7 +123,29 @@ const MemberListModal = ({ isOpen, onClose, group, onBack }) => {
     setActivePopupMemberId(memberId);
   };
 
+  // Xử lý mở modal thêm thành viên
+  const handleOpenAddMemberModal = () => {
+    setShowAddMemberModal(true);
+  };
+
+  // Xử lý đóng modal thêm thành viên và quay lại danh sách thành viên
+  const handleCloseAddMemberModal = () => {
+    setShowAddMemberModal(false);
+  };
+
   if (!isOpen) return null;
+
+  // Nếu đang hiển thị modal thêm thành viên
+  if (showAddMemberModal) {
+    return (
+      <AddMemberModal
+        isOpen={showAddMemberModal}
+        onClose={onClose}
+        onBack={handleCloseAddMemberModal}
+        group={group}
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
@@ -156,7 +180,10 @@ const MemberListModal = ({ isOpen, onClose, group, onBack }) => {
 
         {/* Thêm thành viên button */}
         <div className="p-4 border-b">
-          <button className="w-full py-3 bg-gray-100 hover:bg-gray-200 rounded-md flex items-center justify-center">
+          <button
+            className="w-full py-3 bg-gray-100 hover:bg-gray-200 rounded-md flex items-center justify-center"
+            onClick={handleOpenAddMemberModal}
+          >
             <UserPlus size={20} className="mr-2" />
             <span className="font-medium">Thêm thành viên</span>
           </button>
@@ -239,7 +266,6 @@ const MemberListModal = ({ isOpen, onClose, group, onBack }) => {
         </div>
       </div>
 
-      {/* Popup Menu - Positioned outside the modal */}
       {activePopupMemberId && (
         <div
           ref={popupRef}
@@ -249,57 +275,56 @@ const MemberListModal = ({ isOpen, onClose, group, onBack }) => {
             left: `${popupPosition.left}px`,
           }}
         >
-          {/* Popup content based on selected member */}
+          {/* Menu tùy chọn cho từng thành viên */}
           {filteredMembers.map((member) => {
             const memberUser =
               typeof member.user === "object" ? member.user : null;
             const memberId = memberUser?._id || member.user;
+            const memberName =
+              memberUser?.name || member.displayName || "Thành viên";
+
+            if (memberId !== activePopupMemberId) return null;
+
             const isCurrentUser = memberId === user?._id;
             const memberRole = member.role || "member";
+            const isCreator = group?.creator === memberId;
 
-            if (memberId === activePopupMemberId) {
-              return (
-                <React.Fragment key={`popup-${memberId}`}>
-                  {/* Nếu là admin thì sẽ có chức năng giải tán nhóm */}
-                  {isAdmin && memberRole === "admin" && (
-                    <button
-                      onClick={() => handleRemoveMember(memberId)}
-                      className="flex items-center w-full px-4 py-2 text-left hover:bg-gray-100 text-red-500"
-                    >
-                      <UserMinus size={16} className="mr-2" />
-                      <span>Rời nhóm</span>
-                    </button>
-                  )}
+            return (
+              <div key={`popup-${memberId}`}>
+                {/* Nhắn tin riêng */}
+                {!isCurrentUser && (
+                  <button
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center"
+                    onClick={() => handlePrivateMessage(memberId, memberName)}
+                  >
+                    <MessageSquare size={16} className="mr-2" />
+                    <span>Nhắn tin riêng</span>
+                  </button>
+                )}
 
-                  {/* Nếu người dùng hiện tại là admin và thành viên này không phải admin */}
-                  {isAdmin && memberRole !== "admin" && !isCurrentUser && (
-                    <button
-                      onClick={() => handleMakeAdmin(memberId)}
-                      className="flex items-center w-full px-4 py-2 text-left hover:bg-gray-100"
-                    >
-                      <ShieldCheck size={16} className="mr-2 text-blue-600" />
-                      <span>Cấp quyền quản trị viên</span>
-                    </button>
-                  )}
+                {/* Cấp quyền admin - chỉ hiển thị với admin */}
+                {isAdmin && !isCurrentUser && memberRole !== "admin" && (
+                  <button
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center"
+                    onClick={() => handleMakeAdmin(memberId)}
+                  >
+                    <ShieldCheck size={16} className="mr-2" />
+                    <span>Cấp quyền admin</span>
+                  </button>
+                )}
 
-                  {/* Xóa khỏi nhóm (chỉ admin mới được xóa và không thể tự xóa mình) */}
-                  {isAdmin && !isCurrentUser && (
-                    <>
-                      <div className="border-t border-gray-200">
-                        <button
-                          onClick={() => handleRemoveMember(memberId)}
-                          className="flex items-center w-full px-4 py-2 text-left hover:bg-gray-100 text-red-500"
-                        >
-                          <UserMinus size={16} className="mr-2" />
-                          <span>Xóa khỏi nhóm</span>
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </React.Fragment>
-              );
-            }
-            return null;
+                {/* Xóa khỏi nhóm - admin có thể xóa thành viên khác */}
+                {isAdmin && !isCurrentUser && !isCreator && (
+                  <button
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center text-red-500"
+                    onClick={() => handleRemoveMember(memberId)}
+                  >
+                    <UserMinus size={16} className="mr-2" />
+                    <span>Xóa khỏi nhóm</span>
+                  </button>
+                )}
+              </div>
+            );
           })}
         </div>
       )}

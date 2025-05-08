@@ -69,10 +69,13 @@ const useGroupSocket = () => {
         );
       }
 
-      toast.info(
+      toast(
         `${
           data.newMember?.user?.name || "Thành viên mới"
-        } đã được thêm vào nhóm`
+        } đã được thêm vào nhóm`,
+        {
+          icon: "ℹ️",
+        }
       );
     });
 
@@ -121,7 +124,9 @@ const useGroupSocket = () => {
         );
       }
 
-      toast.info(`Một thành viên đã bị xóa khỏi nhóm`);
+      toast(`Một thành viên đã bị xóa khỏi nhóm`, {
+        icon: "ℹ️",
+      });
     });
 
     // Xử lý khi người dùng bị xóa khỏi nhóm
@@ -134,10 +139,13 @@ const useGroupSocket = () => {
     socket.on("memberRoleChanged", (data) => {
       console.log("🔔 Socket event: memberRoleChanged", data);
       handleRoleChanged(data);
-      toast.info(
+      toast(
         `Vai trò của ${
           data.memberId === user._id ? "bạn" : "một thành viên"
-        } đã được thay đổi`
+        } đã được thay đổi`,
+        {
+          icon: "ℹ️",
+        }
       );
     });
 
@@ -145,7 +153,9 @@ const useGroupSocket = () => {
     socket.on("groupInfoUpdated", (data) => {
       console.log("🔔 Socket event: groupInfoUpdated", data);
       handleGroupUpdated(data);
-      toast.info("Thông tin nhóm đã được cập nhật");
+      toast("Thông tin nhóm đã được cập nhật", {
+        icon: "ℹ️",
+      });
     });
 
     // Xử lý khi có sự kiện cập nhật thông tin cuộc trò chuyện
@@ -211,10 +221,13 @@ const useGroupSocket = () => {
     socket.on("memberJoinedViaLink", (data) => {
       console.log("🔔 Socket event: memberJoinedViaLink", data);
       handleMemberAdded(data);
-      toast.info(
+      toast(
         `${
           data.newMember?.user?.name || "Thành viên mới"
-        } đã tham gia nhóm qua link mời`
+        } đã tham gia nhóm qua link mời`,
+        {
+          icon: "ℹ️",
+        }
       );
     });
 

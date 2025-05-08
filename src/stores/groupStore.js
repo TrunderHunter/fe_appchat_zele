@@ -111,37 +111,36 @@ const useGroupStore = create(
         }
       },
 
-      // Thêm thành viên vào nhóm
+      // Thêm thành viên vào nhóm (sử dụng socket)
       addMember: async (groupId, memberId) => {
         set({ isLoading: true, error: null });
         try {
-          const response = await groupService.addMemberToGroup(
+          const socket = socketManager.getSocket();
+          const currentUserId = useAuthStore.getState().user._id;
+
+          if (!socket || !socket.connected) {
+            throw new Error(
+              "Không thể kết nối đến máy chủ. Vui lòng thử lại sau."
+            );
+          }
+
+          // Phát sự kiện thêm thành viên qua socket
+          socket.emit("addMemberToGroup", {
             groupId,
-            memberId
-          );
-          const result = response.data || response;
+            memberId,
+            addedBy: currentUserId,
+          });
 
-          // Cập nhật danh sách nhóm
-          set((state) => ({
-            groups: state.groups.map((group) =>
-              group._id === groupId ? result : group
-            ),
-            currentGroup:
-              state.currentGroup && state.currentGroup._id === groupId
-                ? result
-                : state.currentGroup,
-            isLoading: false,
-          }));
-
-          // KHÔNG gửi socket event từ đây để tránh duplicate
-
-          return { success: true, group: result };
+          // Trả về success: true ngay lập tức, phần cập nhật state sẽ được xử lý bởi socket handler
+          set({ isLoading: false });
+          return { success: true };
         } catch (error) {
           console.error("Error adding member:", error);
           set({
             isLoading: false,
-            error: error.response?.data?.message || "Không thể thêm thành viên",
+            error: error.message || "Không thể thêm thành viên",
           });
+          toast.error(error.message || "Không thể thêm thành viên");
           return { success: false };
         }
       },

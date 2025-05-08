@@ -303,7 +303,7 @@ const useConversationStore = create(
       // Thêm tin nhắn mới vào cuộc trò chuyện hiện tại (được gọi khi nhận tin nhắn qua socket)
       addNewMessage: (message) => {
         const { currentConversation, currentMessages, conversations } = get();
-        
+
         // Nếu không có message hợp lệ
         if (!message || !message._id) {
           console.warn("Invalid message object received", message);
@@ -313,49 +313,61 @@ const useConversationStore = create(
         console.log("Adding new message:", message);
 
         // 1. Thêm tin nhắn vào cuộc trò chuyện hiện tại nếu đúng conversation
-        if (currentConversation && 
-            ((currentConversation.type === "personal" && 
-              (message.sender_id._id === currentConversation.participants[0].user_id || 
-               message.sender_id._id === currentConversation.participants[1].user_id) && 
-              (message.receiver_id._id === currentConversation.participants[0].user_id || 
-               message.receiver_id._id === currentConversation.participants[1].user_id)) || 
-             (currentConversation.type === "group" && 
-              currentConversation._id === message.receiver_id._id))) {
-          
+        if (
+          currentConversation &&
+          ((currentConversation.type === "personal" &&
+            (message.sender_id._id ===
+              currentConversation.participants[0].user_id ||
+              message.sender_id._id ===
+                currentConversation.participants[1].user_id) &&
+            (message.receiver_id._id ===
+              currentConversation.participants[0].user_id ||
+              message.receiver_id._id ===
+                currentConversation.participants[1].user_id)) ||
+            (currentConversation.type === "group" &&
+              currentConversation._id === message.receiver_id._id))
+        ) {
           // Kiểm tra xem tin nhắn đã có trong danh sách chưa
-          const messageExists = currentMessages.some(msg => msg._id === message._id);
-          
+          const messageExists = currentMessages.some(
+            (msg) => msg._id === message._id
+          );
+
           if (!messageExists) {
             set({
-              currentMessages: [...currentMessages, message]
+              currentMessages: [...currentMessages, message],
             });
           }
         }
 
         // 2. Cập nhật tin nhắn cuối cùng trong danh sách cuộc trò chuyện
-        set(state => ({
-          conversations: state.conversations.map(conv => {
+        set((state) => ({
+          conversations: state.conversations.map((conv) => {
             // Với cuộc trò chuyện cá nhân
             if (conv.type === "personal") {
-              const participantIds = conv.participants.map(p => p.user_id);
+              const participantIds = conv.participants.map((p) => p.user_id);
               // Kiểm tra xem tin nhắn thuộc về cuộc trò chuyện này không
-              if (participantIds.includes(message.sender_id._id) && 
-                  participantIds.includes(message.receiver_id._id)) {
+              if (
+                participantIds.includes(message.sender_id._id) &&
+                participantIds.includes(message.receiver_id._id)
+              ) {
                 return {
                   ...conv,
-                  last_message: message
+                  last_message: message,
                 };
               }
             }
             // Với cuộc trò chuyện nhóm
-            else if (conv.type === "group" && conv._id === message.receiver_id._id) {
+            else if (
+              conv.type === "group" &&
+              conv._id === message.receiver_id._id
+            ) {
               return {
                 ...conv,
-                last_message: message
+                last_message: message,
               };
             }
             return conv;
-          })
+          }),
         }));
       },
 
@@ -401,6 +413,66 @@ const useConversationStore = create(
               ? { ...conv, last_message: message }
               : conv
           ),
+        }));
+      },
+
+      // Cập nhật thông tin cuộc trò chuyện (được gọi khi nhận sự kiện từ socket)
+      updateConversation: (conversation) => {
+        if (!conversation || !conversation._id) {
+          console.warn(
+            "updateConversation called with invalid data",
+            conversation
+          );
+          return;
+        }
+
+        console.log("Updating conversation:", conversation._id);
+
+        set((state) => ({
+          conversations: state.conversations.map((conv) =>
+            conv._id === conversation._id ? { ...conv, ...conversation } : conv
+          ),
+          // Cập nhật currentConversation nếu đang xem cuộc trò chuyện này
+          currentConversation:
+            state.currentConversation &&
+            state.currentConversation._id === conversation._id
+              ? { ...state.currentConversation, ...conversation }
+              : state.currentConversation,
+        }));
+      },
+
+      // Cập nhật thành viên tham gia cuộc trò chuyện (được gọi khi thêm/xóa thành viên)
+      updateConversationParticipants: (conversationId, members) => {
+        if (!conversationId || !members) {
+          console.warn(
+            "updateConversationParticipants called with invalid parameters",
+            {
+              conversationId,
+              members,
+            }
+          );
+          return;
+        }
+
+        console.log("Updating participants for conversation:", conversationId);
+
+        const participants = members.map((member) => ({
+          user_id: member.user._id || member.user,
+          name: member.user.name || "Thành viên",
+          avatar: member.user.primary_avatar || null,
+          role: member.role || "member",
+        }));
+
+        set((state) => ({
+          conversations: state.conversations.map((conv) =>
+            conv._id === conversationId ? { ...conv, participants } : conv
+          ),
+          // Cập nhật currentConversation nếu đang xem cuộc trò chuyện này
+          currentConversation:
+            state.currentConversation &&
+            state.currentConversation._id === conversationId
+              ? { ...state.currentConversation, participants }
+              : state.currentConversation,
         }));
       },
 
