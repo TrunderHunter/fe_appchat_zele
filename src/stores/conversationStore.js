@@ -476,6 +476,35 @@ const useConversationStore = create(
         }));
       },
 
+      // Xóa một cuộc trò chuyện (khi thành viên bị xóa khỏi nhóm hoặc nhóm bị xóa)
+      removeConversation: (conversationId) => {
+        if (!conversationId) {
+          console.warn("removeConversation called with invalid conversationId");
+          return;
+        }
+
+        console.log("Removing conversation from store:", conversationId);
+
+        set((state) => ({
+          // Xóa cuộc trò chuyện khỏi danh sách
+          conversations: state.conversations.filter(
+            (conv) => conv._id !== conversationId
+          ),
+          // Nếu đang ở cuộc trò chuyện bị xóa, reset currentConversation
+          currentConversation:
+            state.currentConversation &&
+            state.currentConversation._id === conversationId
+              ? null
+              : state.currentConversation,
+          // Nếu đang xem tin nhắn của cuộc trò chuyện bị xóa, xóa cả tin nhắn
+          currentMessages:
+            state.currentConversation &&
+            state.currentConversation._id === conversationId
+              ? []
+              : state.currentMessages,
+        }));
+      },
+
       // Reset store
       resetConversationStore: () => {
         set({
@@ -490,6 +519,15 @@ const useConversationStore = create(
 
       // Reset error
       resetError: () => set({ error: null }),
+
+      // Reset cuộc trò chuyện hiện tại (khi người dùng bị xóa khỏi nhóm)
+      resetCurrentConversation: () => {
+        set({
+          currentConversation: null,
+          currentMessages: [],
+          isLoadingMessages: false,
+        });
+      },
     }),
     {
       name: "conversation-storage",

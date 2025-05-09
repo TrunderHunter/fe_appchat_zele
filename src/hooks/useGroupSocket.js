@@ -25,6 +25,7 @@ const useGroupSocket = () => {
     addNewConversation,
     updateConversation,
     updateConversationParticipants,
+    removeConversation,
   } = useConversationStore();
 
   useEffect(() => {
@@ -132,7 +133,26 @@ const useGroupSocket = () => {
     // Xử lý khi người dùng bị xóa khỏi nhóm
     socket.on("removedFromGroup", (data) => {
       console.log("🔔 Socket event: removedFromGroup", data);
+
+      // Xử lý xóa nhóm
       handleRemovedFromGroup(data);
+
+      if (data.conversationId) {
+        console.log("Removing conversation:", data.conversationId);
+
+        // Xóa conversation khỏi danh sách
+        removeConversation(data.conversationId);
+      }
+
+      // Đóng các modal liên quan nếu đang mở
+      try {
+        const modalContext = window.modalContext;
+        if (modalContext && typeof modalContext.closeAllModals === "function") {
+          modalContext.closeAllModals();
+        }
+      } catch (err) {
+        console.error("Cannot close modals:", err);
+      }
     });
 
     // Xử lý khi vai trò thành viên thay đổi

@@ -149,27 +149,42 @@ const useGroupStore = create(
       removeMember: async (groupId, memberId) => {
         set({ isLoading: true, error: null });
         try {
-          const response = await groupService.removeMemberFromGroup(
+          const socket = socketManager.getSocket();
+          const currentUserId = useAuthStore.getState().user._id;
+
+          if (!socket || !socket.connected) {
+            // Nếu không có kết nối socket, sử dụng API
+            const response = await groupService.removeMemberFromGroup(
+              groupId,
+              memberId
+            );
+            const result = response.data || response;
+
+            // Cập nhật danh sách nhóm
+            set((state) => ({
+              groups: state.groups.map((group) =>
+                group._id === groupId ? result : group
+              ),
+              currentGroup:
+                state.currentGroup && state.currentGroup._id === groupId
+                  ? result
+                  : state.currentGroup,
+              isLoading: false,
+            }));
+
+            return { success: true, group: result };
+          }
+
+          // Phát sự kiện xóa thành viên qua socket
+          socket.emit("removeMemberFromGroup", {
             groupId,
-            memberId
-          );
-          const result = response.data || response;
+            memberId,
+            removedBy: currentUserId,
+          });
 
-          // Cập nhật danh sách nhóm
-          set((state) => ({
-            groups: state.groups.map((group) =>
-              group._id === groupId ? result : group
-            ),
-            currentGroup:
-              state.currentGroup && state.currentGroup._id === groupId
-                ? result
-                : state.currentGroup,
-            isLoading: false,
-          }));
-
-          // KHÔNG gửi socket event từ đây để tránh duplicate
-
-          return { success: true, group: result };
+          // Trả về success: true ngay lập tức, phần cập nhật state sẽ được xử lý bởi socket handler
+          set({ isLoading: false });
+          return { success: true };
         } catch (error) {
           console.error("Error removing member:", error);
           set({
@@ -487,7 +502,9 @@ const useGroupStore = create(
               : state.currentGroup,
         }));
 
-        toast.info("Nhóm đã bị xóa");
+        toast("Nhóm đã bị xóa", {
+          icon: "ℹ️",
+        });
       },
 
       // Xử lý khi người dùng được thêm vào nhóm
@@ -512,6 +529,10 @@ const useGroupStore = create(
       handleRemovedFromGroup: (data) => {
         const { groupId } = data;
 
+        // Lấy tên nhóm trước khi xóa khỏi danh sách
+        const removedGroupName =
+          get().groups.find((g) => g._id === groupId)?.name || "nhóm";
+
         set((state) => ({
           groups: state.groups.filter((g) => g._id !== groupId),
           currentGroup:
@@ -520,7 +541,10 @@ const useGroupStore = create(
               : state.currentGroup,
         }));
 
-        toast.info("Bạn đã bị xóa khỏi nhóm");
+        // Hiển thị thông báo với tên nhóm
+        toast(`Bạn đã bị xóa khỏi nhóm ${removedGroupName}`, {
+          icon: "🚫",
+        });
       },
 
       resetError: () => set({ error: null }),
