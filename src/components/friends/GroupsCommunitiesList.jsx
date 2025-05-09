@@ -17,9 +17,6 @@ const GroupsCommunitiesList = () => {
   const [sortOrder, setSortOrder] = useState("recent");
   const [createModalOpen, setCreateModalOpen] = useState(false);
 
-  // Kết nối socket để lắng nghe cập nhật nhóm
-  useGroupSocket();
-
   // Lấy danh sách nhóm khi component mount
   useEffect(() => {
     fetchUserGroups();
