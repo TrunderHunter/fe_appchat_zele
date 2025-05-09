@@ -195,6 +195,51 @@ const useGroupStore = create(
         }
       },
 
+      // Thêm phương thức giải tán nhóm (xóa nhóm)
+      dissolveGroup: async (groupId) => {
+        try {
+          set({ isLoading: true });
+          const currentUserId = useAuthStore.getState().user._id;
+          const socket = socketManager.getSocket();
+
+          if (!socket || !socket.connected) {
+            // Nếu không có kết nối socket, sử dụng API
+            const response = await groupService.deleteGroup(groupId);
+            const result = response.data || response;
+
+            // Cập nhật danh sách nhóm - xóa nhóm khỏi state
+            set((state) => ({
+              groups: state.groups.filter((group) => group._id !== groupId),
+              currentGroup:
+                state.currentGroup?._id === groupId ? null : state.currentGroup,
+              isLoading: false,
+            }));
+
+            return { success: true, ...result };
+          }
+
+          // Phát sự kiện giải tán nhóm qua socket
+          socket.emit("deleteGroup", {
+            groupId,
+            userId: currentUserId,
+          });
+
+          // Vì socket sẽ nhận được sự kiện groupDeleted và cập nhật store,
+          // nên ta chỉ tạm thời cập nhật state loading trước
+          set({ isLoading: false });
+
+          // Trả về success: true ngay lập tức
+          return { success: true };
+        } catch (error) {
+          console.error("Error dissolving group:", error);
+          set({
+            error: error.message || "Không thể giải tán nhóm",
+            isLoading: false,
+          });
+          return { success: false, error };
+        }
+      },
+
       // Thay đổi vai trò thành viên
       changeRole: async (groupId, memberId, role) => {
         set({ isLoading: true, error: null });
@@ -488,11 +533,13 @@ const useGroupStore = create(
               ? group
               : state.currentGroup,
         }));
-      },
-
-      // Xử lý khi nhóm bị xóa
+      }, // Xử lý khi nhóm bị xóa
       handleGroupDeleted: (data) => {
-        const { groupId } = data;
+        const { groupId, deletedBy } = data;
+
+        // Lấy tên nhóm trước khi xóa khỏi state
+        const groupName =
+          get().groups.find((g) => g._id === groupId)?.name || "không xác định";
 
         set((state) => ({
           groups: state.groups.filter((g) => g._id !== groupId),
@@ -502,9 +549,13 @@ const useGroupStore = create(
               : state.currentGroup,
         }));
 
-        toast("Nhóm đã bị xóa", {
-          icon: "ℹ️",
-        });
+        // Chỉ thông báo nếu người hiện tại không phải là người xóa nhóm
+        const currentUserId = useAuthStore.getState().user?._id;
+        if (currentUserId !== deletedBy) {
+          toast(`Nhóm ${groupName} đã bị giải tán`, {
+            icon: "ℹ️",
+          });
+        }
       },
 
       // Xử lý khi người dùng được thêm vào nhóm

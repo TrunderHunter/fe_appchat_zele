@@ -228,6 +228,25 @@ const useGroupSocket = () => {
     socket.on("groupDeleted", (data) => {
       console.log("🔔 Socket event: groupDeleted", data);
       handleGroupDeleted(data);
+
+      // Xóa conversation khỏi danh sách nếu có conversationId
+      if (data.conversationId) {
+        console.log(
+          "Removing conversation due to group deletion:",
+          data.conversationId
+        );
+        removeConversation(data.conversationId);
+      }
+
+      // Đóng các modal liên quan nếu đang mở
+      try {
+        const modalContext = window.modalContext;
+        if (modalContext && typeof modalContext.closeAllModals === "function") {
+          modalContext.closeAllModals();
+        }
+      } catch (err) {
+        console.error("Cannot close modals:", err);
+      }
     });
 
     // Xử lý khi người dùng tham gia nhóm bằng link
@@ -309,6 +328,7 @@ const useGroupSocket = () => {
     addNewConversation,
     updateConversation,
     updateConversationParticipants,
+    removeConversation,
   ]);
 
   return { isConnected };

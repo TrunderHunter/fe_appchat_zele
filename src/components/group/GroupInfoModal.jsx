@@ -9,8 +9,10 @@ import {
   MdShare,
   MdGroup,
   MdCameraAlt,
+  MdDelete,
 } from "react-icons/md";
 import { FiUsers } from "react-icons/fi";
+import { useNavigate } from "react-router-dom";
 import useAuthStore from "../../stores/authStore";
 import { toast } from "react-hot-toast";
 import useGroupStore from "../../stores/groupStore";
@@ -19,7 +21,8 @@ import MemberListModal from "./MemberListModal";
 const GroupInfoModal = ({ isOpen, onClose, group }) => {
   const [showMemberList, setShowMemberList] = useState(false);
   const { user } = useAuthStore();
-  const { leaveGroup, currentGroup } = useGroupStore();
+  const { removeMember, currentGroup, dissolveGroup } = useGroupStore();
+  const navigate = useNavigate();
 
   // Get API base URL from environment variables
   const apiBaseUrl =
@@ -28,6 +31,17 @@ const GroupInfoModal = ({ isOpen, onClose, group }) => {
   // Use currentGroup if available, otherwise use the group prop
   const groupData = currentGroup || group;
 
+  // Kiểm tra người dùng hiện tại có phải admin không
+  const isAdmin = groupData?.members?.some(
+    (member) =>
+      (typeof member.user === "object" ? member.user._id : member.user) ===
+        user?._id && member.role === "admin"
+  );
+
+  // Kiểm tra người dùng hiện tại có phải người tạo nhóm không
+  const isCreator =
+    user?._id === (groupData?.creator?._id || groupData?.creator);
+
   // Xử lý rời nhóm
   const handleLeaveGroup = async () => {
     if (!groupData?._id) return;
@@ -35,13 +49,46 @@ const GroupInfoModal = ({ isOpen, onClose, group }) => {
     try {
       const confirmed = window.confirm("Bạn có chắc muốn rời khỏi nhóm này?");
       if (confirmed) {
-        await leaveGroup(groupData._id);
+        // Nếu người dùng là admin và là người duy nhất trong nhóm, khuyên họ giải tán nhóm thay vì rời đi
+        if (isAdmin && groupData.members?.length === 1) {
+          toast.error(
+            "Bạn là thành viên duy nhất trong nhóm. Vui lòng chọn giải tán nhóm."
+          );
+          return;
+        }
+
+        // Người dùng tự rời nhóm bằng cách xóa chính mình
+        await removeMember(groupData._id, user._id);
         toast.success("Đã rời khỏi nhóm");
         onClose();
+        navigate("/messages");
       }
     } catch (error) {
       console.error("Error leaving group:", error);
       toast.error("Không thể rời khỏi nhóm");
+    }
+  };
+
+  // Xử lý giải tán nhóm
+  const handleDissolveGroup = async () => {
+    if (!groupData?._id) return;
+
+    try {
+      const confirmed = window.confirm(
+        "Bạn có chắc chắn muốn giải tán nhóm này? Hành động này không thể hoàn tác và tất cả dữ liệu nhóm sẽ bị xóa vĩnh viễn."
+      );
+
+      if (confirmed) {
+        const result = await dissolveGroup(groupData._id);
+        if (result.success) {
+          toast.success("Nhóm đã được giải tán thành công");
+          onClose();
+          navigate("/messages");
+        }
+      }
+    } catch (error) {
+      console.error("Error dissolving group:", error);
+      toast.error("Không thể giải tán nhóm");
     }
   };
 
@@ -323,12 +370,23 @@ const GroupInfoModal = ({ isOpen, onClose, group }) => {
 
         {/* Rời nhóm */}
         <div
-          className="px-4 py-3 flex items-center text-red-500 cursor-pointer"
+          className="px-4 py-3 flex items-center text-red-500 cursor-pointer hover:bg-red-50"
           onClick={handleLeaveGroup}
         >
           <MdLogout className="mr-3" size={20} />
           <div className="font-medium">Rời nhóm</div>
         </div>
+
+        {/* Giải tán nhóm - chỉ hiển thị cho admin */}
+        {isAdmin && (
+          <div
+            className="px-4 py-3 flex items-center text-red-600 cursor-pointer hover:bg-red-50 border-t"
+            onClick={handleDissolveGroup}
+          >
+            <MdDelete className="mr-3" size={20} />
+            <div className="font-medium">Giải tán nhóm</div>
+          </div>
+        )}
       </div>
     </div>
   );
