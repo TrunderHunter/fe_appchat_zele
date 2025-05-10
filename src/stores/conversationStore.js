@@ -237,9 +237,7 @@ const useConversationStore = create(
           });
           return { success: false };
         }
-      },
-
-      // Gửi tin nhắn trong cuộc trò chuyện hiện tại
+      }, // Gửi tin nhắn trong cuộc trò chuyện hiện tại
       sendMessage: async (content, file = null) => {
         const { currentConversation } = get();
         if (!currentConversation) {
@@ -279,6 +277,7 @@ const useConversationStore = create(
             );
           } else {
             // Gửi tin nhắn nhóm
+            console.log("Gửi tin nhắn nhóm đến:", currentConversation._id);
             message = await messageService.sendGroupMessage(
               currentConversation._id,
               { message_type: messageType, content },
@@ -293,14 +292,13 @@ const useConversationStore = create(
 
           return { success: true, message };
         } catch (error) {
+          console.error("Lỗi khi gửi tin nhắn:", error);
           toast.error(
             error.response?.data?.message || "Không thể gửi tin nhắn"
           );
           return { success: false };
         }
-      },
-
-      // Thêm tin nhắn mới vào cuộc trò chuyện hiện tại (được gọi khi nhận tin nhắn qua socket)
+      }, // Thêm tin nhắn mới vào cuộc trò chuyện hiện tại (được gọi khi nhận tin nhắn qua socket)
       addNewMessage: (message) => {
         const { currentConversation, currentMessages, conversations } = get();
 
@@ -311,6 +309,15 @@ const useConversationStore = create(
         }
 
         console.log("Adding new message:", message);
+
+        // Xử lý trường hợp tin nhắn nhóm có conversation_id
+        const conversationId =
+          message.conversation_id ||
+          (message.receiver_id && message.receiver_id._id
+            ? message.receiver_id._id
+            : message.receiver_id);
+
+        console.log("Conversation ID extracted from message:", conversationId);
 
         // 1. Thêm tin nhắn vào cuộc trò chuyện hiện tại nếu đúng conversation
         if (
@@ -325,7 +332,7 @@ const useConversationStore = create(
               message.receiver_id._id ===
                 currentConversation.participants[1].user_id)) ||
             (currentConversation.type === "group" &&
-              currentConversation._id === message.receiver_id._id))
+              currentConversation._id === conversationId))
         ) {
           // Kiểm tra xem tin nhắn đã có trong danh sách chưa
           const messageExists = currentMessages.some(
@@ -355,11 +362,11 @@ const useConversationStore = create(
                   last_message: message,
                 };
               }
-            }
-            // Với cuộc trò chuyện nhóm
+            } // Với cuộc trò chuyện nhóm
             else if (
               conv.type === "group" &&
-              conv._id === message.receiver_id._id
+              (conv._id === message.receiver_id._id ||
+                conv._id === message.conversation_id)
             ) {
               return {
                 ...conv,

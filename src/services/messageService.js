@@ -53,6 +53,48 @@ const messageService = {
     }
   },
 
+  // Gửi tin nhắn nhóm
+  sendGroupMessage: async (conversationId, messageData, file = null) => {
+    try {
+      // Tạo FormData nếu có file đính kèm
+      if (file) {
+        const formData = new FormData();
+        formData.append("conversationId", conversationId);
+        formData.append("message_type", messageData.message_type || "text");
+
+        if (messageData.content) {
+          formData.append("content", messageData.content);
+        }
+
+        if (messageData.mentions) {
+          formData.append("mentions", JSON.stringify(messageData.mentions));
+        }
+
+        if (messageData.self_destruct_timer) {
+          formData.append(
+            "self_destruct_timer",
+            messageData.self_destruct_timer
+          );
+        }
+        formData.append("file", file);
+
+        return await api.post("/message/send-group", formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+      } else {
+        // Không có file, gửi JSON thông thường
+        return await api.post("/message/send-group", {
+          conversationId,
+          ...messageData,
+        });
+      }
+    } catch (error) {
+      throw error;
+    }
+  },
+
   // Thu hồi tin nhắn
   revokeMessage: async (messageId) => {
     try {
