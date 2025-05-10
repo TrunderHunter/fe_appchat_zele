@@ -217,9 +217,7 @@ const useGroupSocket = () => {
       } catch (err) {
         console.error("Cannot close modals:", err);
       }
-    });
-
-    // Xử lý khi vai trò thành viên thay đổi
+    });    // Xử lý khi vai trò thành viên thay đổi
     socket.on("memberRoleChanged", (data) => {
       console.log("🔔 Socket event: memberRoleChanged", data);
       handleRoleChanged(data);
@@ -235,6 +233,20 @@ const useGroupSocket = () => {
             data.memberId === user._id ? "bạn" : "một thành viên khác"
           }`
         );
+      }
+      // Xử lý trường hợp chuyển quyền admin
+      else if (data.newRole === "admin") {
+        toast.success(
+          `${isCurrentUser ? "Bạn" : "Thành viên"} đã trở thành trưởng nhóm`,
+          { duration: 3000 }
+        );
+      }
+      // Xử lý trường hợp hạ quyền admin xuống thành viên thường
+      else if (data.previousRole === "admin" && data.newRole === "member") {
+        toast(`${isCurrentUser ? "Bạn" : "Trưởng nhóm cũ"} đã chuyển thành thành viên thường`, {
+          icon: "ℹ️",
+          duration: 4000,
+        });
       }
       // Xử lý trường hợp gán quyền moderator
       else if (data.newRole === "moderator") {

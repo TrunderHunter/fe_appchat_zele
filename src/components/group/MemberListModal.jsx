@@ -102,7 +102,9 @@ const MemberListModal = ({ isOpen, onClose, group, onBack }) => {
       console.error("Error demoting to member:", error);
       toast.error("Không thể thu hồi quyền");
     }
-  }; // Xử lý xóa thành viên khỏi nhóm
+  };
+
+  // Xử lý xóa thành viên khỏi nhóm
   const handleRemoveMember = async (memberId) => {
     if (!group?._id || !memberId) return;
 
@@ -385,7 +387,7 @@ const MemberListModal = ({ isOpen, onClose, group, onBack }) => {
                     onClick={() => handleMakeAdmin(memberId)}
                   >
                     <ShieldCheck size={16} className="mr-2" />
-                    <span>Cấp quyền admin</span>
+                    <span>Chuyển quyền admin</span>
                   </button>
                 )}
                 {/* Cấp quyền moderator - chỉ hiển thị với admin và khi thành viên là member thường */}
