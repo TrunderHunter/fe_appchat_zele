@@ -17,11 +17,20 @@ import useAuthStore from "../../stores/authStore";
 import { toast } from "react-hot-toast";
 import useGroupStore from "../../stores/groupStore";
 import MemberListModal from "./MemberListModal";
+import TransferAdminModal from "./TransferAdminModal";
 
 const GroupInfoModal = ({ isOpen, onClose, group }) => {
   const [showMemberList, setShowMemberList] = useState(false);
+  const [showTransferAdminModal, setShowTransferAdminModal] = useState(false);
   const { user } = useAuthStore();
-  const { removeMember, currentGroup, dissolveGroup } = useGroupStore();
+  const {
+    removeMember,
+    currentGroup,
+    dissolveGroup,
+    changeRole,
+    transferAdminAndLeaveGroup,
+    transferOwnershipAndLeave,
+  } = useGroupStore();
   const navigate = useNavigate();
 
   // Get API base URL from environment variables
@@ -30,7 +39,6 @@ const GroupInfoModal = ({ isOpen, onClose, group }) => {
 
   // Use currentGroup if available, otherwise use the group prop
   const groupData = currentGroup || group;
-
   // Kiểm tra người dùng hiện tại có phải admin không
   const isAdmin = groupData?.members?.some(
     (member) =>
@@ -41,23 +49,36 @@ const GroupInfoModal = ({ isOpen, onClose, group }) => {
   // Kiểm tra người dùng hiện tại có phải người tạo nhóm không
   const isCreator =
     user?._id === (groupData?.creator?._id || groupData?.creator);
-
-  // Xử lý rời nhóm
   const handleLeaveGroup = async () => {
     if (!groupData?._id) return;
 
     try {
       const confirmed = window.confirm("Bạn có chắc muốn rời khỏi nhóm này?");
       if (confirmed) {
-        // Nếu người dùng là admin và là người duy nhất trong nhóm, khuyên họ giải tán nhóm thay vì rời đi
-        if (isAdmin && groupData.members?.length === 1) {
+        // Nếu người dùng là thành viên duy nhất trong nhóm, khuyên họ giải tán nhóm thay vì rời đi
+        if (groupData.members?.length === 1) {
           toast.error(
             "Bạn là thành viên duy nhất trong nhóm. Vui lòng chọn giải tán nhóm."
           );
           return;
         }
 
-        // Người dùng tự rời nhóm bằng cách xóa chính mình
+        // Nếu người dùng là người tạo nhóm và có thành viên khác trong nhóm
+        if (isCreator && groupData.members?.length > 1) {
+          toast.loading("Bạn phải chuyển quyền sở hữu nhóm trước khi rời đi");
+          // Hiển thị modal chọn người sở hữu mới
+          setShowTransferAdminModal(true);
+          return;
+        }
+
+        // Nếu người dùng là admin (không phải creator) và có thành viên khác trong nhóm
+        if (isAdmin && !isCreator && groupData.members?.length > 1) {
+          // Hiển thị modal chọn admin mới
+          setShowTransferAdminModal(true);
+          return;
+        }
+
+        // Người dùng không phải admin/creator hoặc đã chuyển quyền, có thể rời nhóm
         await removeMember(groupData._id, user._id);
         toast.success("Đã rời khỏi nhóm");
         onClose();
@@ -65,7 +86,42 @@ const GroupInfoModal = ({ isOpen, onClose, group }) => {
       }
     } catch (error) {
       console.error("Error leaving group:", error);
-      toast.error("Không thể rời khỏi nhóm");
+      toast.error(error.message || "Không thể rời khỏi nhóm");
+    }
+  };
+  // Xử lý khi chọn thành viên để chuyển quyền admin
+  const handleTransferAdmin = async (selectedMember) => {
+    if (!groupData?._id || !selectedMember) return;
+
+    try {
+      const memberId =
+        typeof selectedMember.user === "object"
+          ? selectedMember.user._id
+          : selectedMember.user;
+
+      toast.loading("Đang xử lý...");
+
+      // Xử lý khác nhau cho người tạo nhóm và admin thông thường
+      if (isCreator) {
+        // Nếu là người tạo nhóm, chuyển quyền sở hữu và rời nhóm
+        await transferOwnershipAndLeave(groupData._id, memberId);
+        toast.dismiss();
+        toast.success("Đã chuyển quyền sở hữu nhóm và rời khỏi nhóm");
+      } else {
+        // Nếu chỉ là admin thông thường, chuyển quyền admin và rời nhóm
+        await transferAdminAndLeaveGroup(groupData._id, memberId);
+        toast.dismiss();
+        toast.success("Đã chuyển quyền quản trị viên và rời khỏi nhóm");
+      }
+
+      // Đóng modal và chuyển hướng sau khi hoàn tất
+      setShowTransferAdminModal(false);
+      onClose();
+      navigate("/messages");
+    } catch (error) {
+      console.error("Error transferring admin role:", error);
+      toast.dismiss();
+      toast.error(error.message || "Không thể chuyển quyền quản trị viên");
     }
   };
 
@@ -150,7 +206,6 @@ const GroupInfoModal = ({ isOpen, onClose, group }) => {
 
   // Nếu modal không mở hoặc không có thông tin nhóm thì không hiển thị
   if (!isOpen || !groupData) return null;
-
   // Hiển thị danh sách thành viên khi nhấn vào mục thành viên
   if (showMemberList) {
     return (
@@ -160,6 +215,26 @@ const GroupInfoModal = ({ isOpen, onClose, group }) => {
         onBack={() => setShowMemberList(false)}
         group={groupData}
       />
+    );
+  }
+  // Hiển thị modal chọn admin mới khi cần chuyển quyền admin
+  if (showTransferAdminModal) {
+    return (
+      <>
+        <div
+          className="fixed inset-0 z-50 bg-black/30"
+          onClick={() => {}}
+        ></div>
+        <TransferAdminModal
+          isOpen={showTransferAdminModal}
+          onClose={() => setShowTransferAdminModal(false)}
+          group={groupData}
+          currentUser={user}
+          onSelectMember={handleTransferAdmin}
+          excludeMembers={[]} // Có thể loại trừ thêm thành viên nếu cần
+          isOwnerTransfer={isCreator} // Truyền flag để biết đây là chuyển quyền sở hữu hay admin
+        />
+      </>
     );
   }
 
@@ -250,6 +325,7 @@ const GroupInfoModal = ({ isOpen, onClose, group }) => {
               const memberId = memberUser?._id;
               const memberAvatar = memberUser?.primary_avatar;
               const isAdmin = member.role === "admin";
+              const isModerator = member.role === "moderator";
               const tooltipText = getMemberTooltip(memberUser);
               const isUserSelf = isCurrentUser(memberId);
 
@@ -275,10 +351,15 @@ const GroupInfoModal = ({ isOpen, onClose, group }) => {
                         {(memberUser?.name || "").substring(0, 1)}
                       </div>
                     )}
-                  </div>
+                  </div>{" "}
                   {isAdmin && (
                     <div className="absolute -bottom-1 -right-1 bg-blue-500 text-white text-[8px] rounded-full px-1 py-0.5">
                       Admin
+                    </div>
+                  )}
+                  {isModerator && (
+                    <div className="absolute -bottom-1 -right-1 bg-green-500 text-white text-[8px] rounded-full px-1 py-0.5">
+                      Mod
                     </div>
                   )}
                   {isUserSelf && (

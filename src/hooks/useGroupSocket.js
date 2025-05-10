@@ -110,9 +110,7 @@ const useGroupSocket = () => {
           updated_at: data.group.updated_at,
         });
       }
-    });
-
-    // Xử lý khi thành viên bị xóa khỏi nhóm
+    }); // Xử lý khi thành viên bị xóa khỏi nhóm
     socket.on("memberRemovedFromGroup", (data) => {
       console.log("🔔 Socket event: memberRemovedFromGroup", data);
       handleMemberRemoved(data);
@@ -125,12 +123,53 @@ const useGroupSocket = () => {
         );
       }
 
-      toast(`Một thành viên đã bị xóa khỏi nhóm`, {
-        icon: "ℹ️",
-      });
-    });
+      // Nếu đây là kết quả của việc chuyển quyền admin và rời nhóm
+      if (data.wasAdmin && data.newAdminId) {
+        const adminName =
+          data.group.members.find(
+            (m) => (m.user._id || m.user) === data.newAdminId
+          )?.user?.name || "Thành viên khác";
 
-    // Xử lý khi người dùng bị xóa khỏi nhóm
+        toast.success(
+          `Quyền quản trị viên đã được chuyển cho ${adminName} và ${
+            data.removedMember === user._id ? "bạn" : "một thành viên"
+          } đã rời nhóm`,
+          { duration: 5000 }
+        );
+      } else {
+        // Nếu là người dùng tự rời nhóm
+        if (data.removedBy === data.removedMember) {
+          toast("Một thành viên đã rời nhóm", { icon: "ℹ️" });
+        }
+        // Nếu là bị ai đó xóa khỏi nhóm
+        else {
+          // Tìm thông tin về người xóa (nếu có)
+          const removerRole = data.removerRole || ""; // Nhận vai trò từ socket
+          const removedUserName = data.removedMemberName || "Một thành viên";
+
+          // Hiển thị thông báo với nội dung chi tiết hơn về người thực hiện
+          if (removerRole === "admin") {
+            toast.success(
+              `${removedUserName} đã bị quản trị viên xóa khỏi nhóm`,
+              {
+                icon: "👮",
+                duration: 4000,
+              }
+            );
+          } else if (removerRole === "moderator") {
+            toast.success(
+              `${removedUserName} đã bị điều hành viên xóa khỏi nhóm`,
+              {
+                icon: "🛡️",
+                duration: 4000,
+              }
+            );
+          } else {
+            toast(`${removedUserName} đã bị xóa khỏi nhóm`, { icon: "ℹ️" });
+          }
+        }
+      }
+    }); // Xử lý khi người dùng bị xóa khỏi nhóm
     socket.on("removedFromGroup", (data) => {
       console.log("🔔 Socket event: removedFromGroup", data);
 
@@ -142,6 +181,31 @@ const useGroupSocket = () => {
 
         // Xóa conversation khỏi danh sách
         removeConversation(data.conversationId);
+      }
+
+      // Hiển thị thông báo dựa vào từng loại sự kiện
+      if (data.byTransfer) {
+        toast.success("Bạn đã chuyển quyền quản trị viên và rời khỏi nhóm", {
+          duration: 5000,
+        });
+      } else if (data.selfRemoved) {
+        toast.success("Bạn đã rời khỏi nhóm", {
+          duration: 3000,
+        });
+      } else if (data.byAdmin) {
+        toast.error("Bạn đã bị quản trị viên xóa khỏi nhóm", {
+          icon: "👮",
+          duration: 5000,
+        });
+      } else if (data.byModerator) {
+        toast.error("Bạn đã bị điều hành viên xóa khỏi nhóm", {
+          icon: "🛡️",
+          duration: 5000,
+        });
+      } else {
+        toast.error("Bạn đã bị xóa khỏi nhóm", {
+          duration: 4000,
+        });
       }
 
       // Đóng các modal liên quan nếu đang mở
@@ -159,14 +223,51 @@ const useGroupSocket = () => {
     socket.on("memberRoleChanged", (data) => {
       console.log("🔔 Socket event: memberRoleChanged", data);
       handleRoleChanged(data);
-      toast(
-        `Vai trò của ${
-          data.memberId === user._id ? "bạn" : "một thành viên"
-        } đã được thay đổi`,
-        {
+
+      // Định dạng thông báo dựa trên vai trò mới được gán
+      const isCurrentUser = data.memberId === user._id;
+      const targetText = isCurrentUser ? "bạn" : "một thành viên";
+
+      // Kiểm tra xem đây có phải là chuyển quyền admin trước khi rời nhóm hay không
+      if (data.wasAdmin && data.newRole === "admin") {
+        toast.success(
+          `Quyền quản trị viên đã được chuyển cho ${
+            data.memberId === user._id ? "bạn" : "một thành viên khác"
+          }`
+        );
+      }
+      // Xử lý trường hợp gán quyền moderator
+      else if (data.newRole === "moderator") {
+        toast.success(
+          `${
+            isCurrentUser ? "Bạn" : "Một thành viên"
+          } đã được cấp quyền điều hành viên`,
+          { duration: 3000 }
+        );
+      }
+      // Xử lý trường hợp thu hồi quyền moderator
+      else if (data.previousRole === "moderator" && data.newRole === "member") {
+        toast(`Quyền điều hành viên của ${targetText} đã bị thu hồi`, {
           icon: "ℹ️",
-        }
-      );
+        });
+      }
+      // Các trường hợp khác
+      else {
+        toast(
+          `Vai trò của ${
+            data.memberId === user._id ? "bạn" : "một thành viên"
+          } đã được thay đổi thành ${
+            data.newRole === "admin"
+              ? "quản trị viên"
+              : data.newRole === "moderator"
+              ? "điều hành viên"
+              : "thành viên"
+          }`,
+          {
+            icon: "ℹ️",
+          }
+        );
+      }
     });
 
     // Xử lý khi thông tin nhóm được cập nhật
@@ -176,6 +277,29 @@ const useGroupSocket = () => {
       toast("Thông tin nhóm đã được cập nhật", {
         icon: "ℹ️",
       });
+    });
+
+    // Xử lý khi quyền sở hữu nhóm được chuyển giao
+    socket.on("ownershipTransferred", (data) => {
+      console.log("🔔 Socket event: ownershipTransferred", data);
+      handleGroupUpdated(data);
+
+      const isCurrentUserNewOwner = data.newOwnerId === user._id;
+      const isCurrentUserPreviousOwner = data.previousOwnerId === user._id;
+
+      if (isCurrentUserNewOwner) {
+        toast.success("Bạn đã trở thành chủ sở hữu mới của nhóm này", {
+          duration: 5000,
+        });
+      } else if (isCurrentUserPreviousOwner) {
+        toast.success("Bạn đã chuyển quyền sở hữu nhóm thành công", {
+          duration: 5000,
+        });
+      } else {
+        toast("Nhóm có chủ sở hữu mới", {
+          icon: "ℹ️",
+        });
+      }
     });
 
     // Xử lý khi có sự kiện cập nhật thông tin cuộc trò chuyện
@@ -305,6 +429,7 @@ const useGroupSocket = () => {
       socket.off("removedFromGroup");
       socket.off("memberRoleChanged");
       socket.off("groupInfoUpdated");
+      socket.off("ownershipTransferred");
       socket.off("conversationInfoUpdated");
       socket.off("newGroupCreated");
       socket.off("groupDeleted");

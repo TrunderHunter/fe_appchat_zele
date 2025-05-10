@@ -163,11 +163,22 @@ const groupService = {
       throw error;
     }
   },
-
   // Xóa nhóm
   deleteGroup: async (groupId) => {
     try {
       return await api.delete(`/group/${groupId}`);
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Chuyển quyền sở hữu nhóm
+  transferOwnership: async (groupId, newOwnerId) => {
+    try {
+      return await api.post(`/group/transfer-ownership`, {
+        groupId,
+        newOwnerId,
+      });
     } catch (error) {
       throw error;
     }

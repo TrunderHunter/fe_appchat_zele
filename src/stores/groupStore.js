@@ -143,14 +143,32 @@ const useGroupStore = create(
           toast.error(error.message || "Không thể thêm thành viên");
           return { success: false };
         }
-      },
-
-      // Xóa thành viên khỏi nhóm
+      }, // Xóa thành viên khỏi nhóm
       removeMember: async (groupId, memberId) => {
         set({ isLoading: true, error: null });
         try {
           const socket = socketManager.getSocket();
           const currentUserId = useAuthStore.getState().user._id;
+          const currentUser = useAuthStore.getState().user;
+
+          // Lấy thông tin nhóm và vai trò hiện tại của người dùng
+          const currentGroup =
+            get().groups.find((group) => group._id === groupId) ||
+            get().currentGroup;
+
+          if (!currentGroup) {
+            throw new Error("Không tìm thấy thông tin nhóm");
+          }
+
+          // Xác định vai trò của người thực hiện hành động
+          const currentUserMember = currentGroup.members.find(
+            (member) =>
+              (typeof member.user === "object"
+                ? member.user._id
+                : member.user) === currentUserId
+          );
+
+          const currentUserRole = currentUserMember?.role || "member";
 
           if (!socket || !socket.connected) {
             // Nếu không có kết nối socket, sử dụng API
@@ -175,11 +193,12 @@ const useGroupStore = create(
             return { success: true, group: result };
           }
 
-          // Phát sự kiện xóa thành viên qua socket
+          // Phát sự kiện xóa thành viên qua socket với thông tin vai trò
           socket.emit("removeMemberFromGroup", {
             groupId,
             memberId,
             removedBy: currentUserId,
+            removerRole: currentUserRole, // Thêm vai trò của người thực hiện để hiển thị thông báo phù hợp
           });
 
           // Trả về success: true ngay lập tức, phần cập nhật state sẽ được xử lý bởi socket handler
@@ -238,34 +257,48 @@ const useGroupStore = create(
           });
           return { success: false, error };
         }
-      },
-
-      // Thay đổi vai trò thành viên
+      }, // Thay đổi vai trò thành viên (sử dụng socket)
       changeRole: async (groupId, memberId, role) => {
         set({ isLoading: true, error: null });
         try {
-          const response = await groupService.changeRoleMember(
+          const socket = socketManager.getSocket();
+          const currentUserId = useAuthStore.getState().user._id;
+
+          if (!socket || !socket.connected) {
+            // Nếu không có kết nối socket, sử dụng API
+            const response = await groupService.changeRoleMember(
+              groupId,
+              memberId,
+              role
+            );
+            const result = response.data || response;
+
+            // Cập nhật danh sách nhóm
+            set((state) => ({
+              groups: state.groups.map((group) =>
+                group._id === groupId ? result : group
+              ),
+              currentGroup:
+                state.currentGroup && state.currentGroup._id === groupId
+                  ? result
+                  : state.currentGroup,
+              isLoading: false,
+            }));
+
+            return { success: true, group: result };
+          }
+
+          // Phát sự kiện thay đổi vai trò qua socket
+          socket.emit("changeRoleMember", {
             groupId,
             memberId,
-            role
-          );
-          const result = response.data || response;
+            role,
+            changedBy: currentUserId,
+          });
 
-          // Cập nhật danh sách nhóm
-          set((state) => ({
-            groups: state.groups.map((group) =>
-              group._id === groupId ? result : group
-            ),
-            currentGroup:
-              state.currentGroup && state.currentGroup._id === groupId
-                ? result
-                : state.currentGroup,
-            isLoading: false,
-          }));
-
-          // KHÔNG gửi socket event từ đây để tránh duplicate
-
-          return { success: true, group: result };
+          // Trả về success: true ngay lập tức, phần cập nhật state sẽ được xử lý bởi socket handler
+          set({ isLoading: false });
+          return { success: true };
         } catch (error) {
           console.error("Error changing role:", error);
           set({
@@ -275,6 +308,162 @@ const useGroupStore = create(
               "Không thể thay đổi vai trò thành viên",
           });
           return { success: false };
+        }
+      },
+
+      // Chuyển quyền admin và rời nhóm
+      transferAdminAndLeaveGroup: async (groupId, newAdminId) => {
+        set({ isLoading: true, error: null });
+        try {
+          const socket = socketManager.getSocket();
+          const currentUserId = useAuthStore.getState().user._id;
+
+          if (!socket || !socket.connected) {
+            throw new Error(
+              "Không thể kết nối đến máy chủ. Vui lòng thử lại sau."
+            );
+          }
+
+          // Trả về Promise để đợi socket emit và lắng nghe kết quả
+          return new Promise((resolve, reject) => {
+            socket.emit("transferAdminAndLeaveGroup", {
+              groupId,
+              newAdminId,
+              userId: currentUserId,
+            });
+
+            // Đợi phản hồi từ server
+            socket.once("transferAdminAndLeaveGroupSuccess", (data) => {
+              set({ isLoading: false });
+              resolve({ success: true, ...data });
+            });
+
+            socket.once("error", (error) => {
+              set({
+                isLoading: false,
+                error:
+                  error.message || "Không thể chuyển quyền admin và rời nhóm",
+              });
+              reject(
+                new Error(
+                  error.message || "Không thể chuyển quyền admin và rời nhóm"
+                )
+              );
+            });
+
+            // Timeout để tránh đợi vô thời hạn
+            setTimeout(() => {
+              set({ isLoading: false });
+              reject(new Error("Quá thời gian xử lý yêu cầu"));
+            }, 10000);
+          });
+        } catch (error) {
+          console.error("Error transferring admin and leaving group:", error);
+          set({
+            isLoading: false,
+            error: error.message || "Không thể chuyển quyền admin và rời nhóm",
+          });
+          throw error;
+        }
+      },
+
+      // Chuyển quyền sở hữu nhóm
+      transferOwnership: async (groupId, newOwnerId) => {
+        set({ isLoading: true, error: null });
+        try {
+          const currentUserId = useAuthStore.getState().user._id;
+
+          // Gọi API để chuyển quyền sở hữu
+          const response = await groupService.transferOwnership(
+            groupId,
+            newOwnerId
+          );
+
+          const result = response.data || response;
+
+          // Cập nhật danh sách nhóm
+          set((state) => ({
+            groups: state.groups.map((group) =>
+              group._id === groupId ? result.data : group
+            ),
+            currentGroup:
+              state.currentGroup && state.currentGroup._id === groupId
+                ? result.data
+                : state.currentGroup,
+            isLoading: false,
+          }));
+
+          return { success: true, group: result.data };
+        } catch (error) {
+          console.error("Error transferring ownership:", error);
+          set({
+            isLoading: false,
+            error:
+              error.response?.data?.message ||
+              "Không thể chuyển quyền sở hữu nhóm",
+          });
+          return { success: false, error };
+        }
+      },
+
+      // Chuyển quyền sở hữu và rời nhóm
+      transferOwnershipAndLeave: async (groupId, newOwnerId) => {
+        set({ isLoading: true, error: null });
+        try {
+          const currentUserId = useAuthStore.getState().user._id;
+
+          // Sử dụng socket để thực hiện cả hai hành động trong một lần gọi
+          const socket = socketManager.getSocket();
+
+          if (!socket || !socket.connected) {
+            throw new Error(
+              "Không thể kết nối đến máy chủ. Vui lòng thử lại sau."
+            );
+          }
+
+          // Trả về Promise để đợi socket emit và lắng nghe kết quả
+          return new Promise((resolve, reject) => {
+            socket.emit("transferOwnershipAndLeave", {
+              groupId,
+              currentOwnerId: currentUserId,
+              newOwnerId,
+            });
+
+            // Đợi phản hồi từ server
+            socket.once("transferOwnershipAndLeaveSuccess", (data) => {
+              set({ isLoading: false });
+              resolve({ success: true, ...data });
+            });
+
+            socket.once("error", (error) => {
+              set({
+                isLoading: false,
+                error:
+                  error.message || "Không thể chuyển quyền sở hữu và rời nhóm",
+              });
+              reject(
+                new Error(
+                  error.message || "Không thể chuyển quyền sở hữu và rời nhóm"
+                )
+              );
+            });
+
+            // Timeout để tránh đợi vô thời hạn
+            setTimeout(() => {
+              set({ isLoading: false });
+              reject(new Error("Quá thời gian xử lý yêu cầu"));
+            }, 10000);
+          });
+        } catch (error) {
+          console.error(
+            "Error transferring ownership and leaving group:",
+            error
+          );
+          set({
+            isLoading: false,
+            error: error.message || "Không thể chuyển quyền sở hữu và rời nhóm",
+          });
+          throw error;
         }
       },
 

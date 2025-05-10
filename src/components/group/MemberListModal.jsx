@@ -20,15 +20,19 @@ const MemberListModal = ({ isOpen, onClose, group, onBack }) => {
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const popupRef = useRef(null);
   const { user } = useAuthStore();
-  const { removeMember, changeRole } = useGroupStore();
-  const navigate = useNavigate();
-
-  // Kiểm tra xem người dùng hiện tại có phải là admin của nhóm không
-  const isAdmin = group?.members?.some(
+  const { removeMember, changeRole, transferOwnership } = useGroupStore();
+  const navigate = useNavigate(); // Kiểm tra vai trò của người dùng hiện tại trong nhóm
+  const currentUserMember = group?.members?.find(
     (member) =>
       (typeof member.user === "object" ? member.user._id : member.user) ===
-        user?._id && member.role === "admin"
+      user?._id
   );
+
+  // Xác định vai trò cụ thể
+  const currentUserRole = currentUserMember?.role || "member";
+  const isAdmin = currentUserRole === "admin";
+  const isModerator = currentUserRole === "moderator";
+  const isCreator = group?.creator === user?._id;
 
   // Lọc danh sách thành viên theo từ khóa tìm kiếm
   const filteredMembers = React.useMemo(() => {
@@ -74,22 +78,89 @@ const MemberListModal = ({ isOpen, onClose, group, onBack }) => {
     }
   };
 
-  // Xử lý xóa thành viên khỏi nhóm
+  // Xử lý gán quyền Moderator
+  const handleMakeModerator = async (memberId) => {
+    try {
+      if (!group?._id) return;
+      await changeRole(group._id, memberId, "moderator");
+      toast.success("Đã cấp quyền điều hành viên");
+      setActivePopupMemberId(null); // Đóng popup sau khi thực hiện
+    } catch (error) {
+      console.error("Error making moderator:", error);
+      toast.error("Không thể cấp quyền điều hành viên");
+    }
+  };
+
+  // Xử lý thu hồi quyền, chuyển về thành viên thường
+  const handleDemoteToMember = async (memberId) => {
+    try {
+      if (!group?._id) return;
+      await changeRole(group._id, memberId, "member");
+      toast.success("Đã thu hồi quyền");
+      setActivePopupMemberId(null); // Đóng popup sau khi thực hiện
+    } catch (error) {
+      console.error("Error demoting to member:", error);
+      toast.error("Không thể thu hồi quyền");
+    }
+  }; // Xử lý xóa thành viên khỏi nhóm
   const handleRemoveMember = async (memberId) => {
     if (!group?._id || !memberId) return;
 
     try {
-      const confirmed = window.confirm(
-        "Bạn có chắc muốn xóa thành viên này khỏi nhóm?"
+      // Tìm thông tin của thành viên để hiển thị trong thông báo
+      const memberToRemove = filteredMembers.find(
+        (m) => (typeof m.user === "object" ? m.user._id : m.user) === memberId
       );
+
+      const memberName =
+        memberToRemove &&
+        (typeof memberToRemove.user === "object"
+          ? memberToRemove.user.name
+          : memberToRemove.displayName || "thành viên này");
+
+      // Lấy thông tin vai trò của người bị xóa để hiện thị thông báo phù hợp
+      const memberRole = memberToRemove?.role || "member";
+
+      // Hiển thị thông báo xác nhận khác nhau cho admin và moderator
+      let confirmMessage = `Bạn có chắc muốn xóa ${memberName} khỏi nhóm?`;
+
+      if (isModerator && !isAdmin && memberRole === "member") {
+        confirmMessage = `Với tư cách điều hành viên, bạn có chắc muốn xóa thành viên ${memberName} khỏi nhóm?`;
+      }
+
+      const confirmed = window.confirm(confirmMessage);
+
       if (confirmed) {
-        await removeMember(group._id, memberId);
-        setActivePopupMemberId(null);
-        toast.success("Đã xóa thành viên khỏi nhóm");
+        const loadingToast = toast.loading("Đang xóa thành viên...");
+        try {
+          await removeMember(group._id, memberId);
+
+          // Hiển thị thông báo với quyền hạn tương ứng
+          if (isAdmin) {
+            toast.success(`Quản trị viên đã xóa ${memberName} khỏi nhóm`);
+          } else if (isModerator) {
+            toast.success(`Điều hành viên đã xóa ${memberName} khỏi nhóm`);
+          } else {
+            toast.success(`Đã xóa ${memberName} khỏi nhóm`);
+          }
+
+          setActivePopupMemberId(null);
+        } catch (error) {
+          console.error("Error removing member:", error);
+          const errorMessage =
+            error.response?.data?.message ||
+            (isModerator
+              ? "Điều hành viên chỉ có thể xóa thành viên thường"
+              : "Không thể xóa thành viên");
+          toast.error(errorMessage);
+        } finally {
+          toast.dismiss(loadingToast);
+        }
       }
     } catch (error) {
       console.error("Error removing member:", error);
-      toast.error("Không thể xóa thành viên");
+      toast.dismiss();
+      toast.error(error.message || "Không thể xóa thành viên");
     }
   };
 
@@ -232,12 +303,18 @@ const MemberListModal = ({ isOpen, onClose, group, onBack }) => {
                     </div>
                     <div>
                       <div className="flex items-center">
+                        {" "}
                         <h3 className="font-medium">
                           {isCurrentUser ? "Bạn" : memberName}
                         </h3>
                         {memberRole === "admin" && (
                           <span className="ml-2 text-xs text-gray-500">
                             Trưởng nhóm
+                          </span>
+                        )}
+                        {memberRole === "moderator" && (
+                          <span className="ml-2 text-xs text-blue-500">
+                            Điều hành viên
                           </span>
                         )}
                       </div>
@@ -291,7 +368,7 @@ const MemberListModal = ({ isOpen, onClose, group, onBack }) => {
 
             return (
               <div key={`popup-${memberId}`}>
-                {/* Nhắn tin riêng */}
+                {/* Nhắn tin riêng */}{" "}
                 {!isCurrentUser && (
                   <button
                     className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center"
@@ -301,7 +378,6 @@ const MemberListModal = ({ isOpen, onClose, group, onBack }) => {
                     <span>Nhắn tin riêng</span>
                   </button>
                 )}
-
                 {/* Cấp quyền admin - chỉ hiển thị với admin */}
                 {isAdmin && !isCurrentUser && memberRole !== "admin" && (
                   <button
@@ -312,12 +388,39 @@ const MemberListModal = ({ isOpen, onClose, group, onBack }) => {
                     <span>Cấp quyền admin</span>
                   </button>
                 )}
-
-                {/* Xóa khỏi nhóm - admin có thể xóa thành viên khác */}
-                {isAdmin && !isCurrentUser && !isCreator && (
+                {/* Cấp quyền moderator - chỉ hiển thị với admin và khi thành viên là member thường */}
+                {isAdmin && !isCurrentUser && memberRole === "member" && (
+                  <button
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center"
+                    onClick={() => handleMakeModerator(memberId)}
+                  >
+                    <ShieldCheck size={16} className="mr-2" />
+                    <span>Cấp quyền điều hành viên</span>
+                  </button>
+                )}
+                {/* Thu hồi quyền moderator - chỉ hiển thị với admin và khi thành viên là moderator */}
+                {isAdmin && !isCurrentUser && memberRole === "moderator" && (
+                  <button
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center"
+                    onClick={() => handleDemoteToMember(memberId)}
+                  >
+                    <UserMinus size={16} className="mr-2" />
+                    <span>Thu hồi quyền điều hành</span>
+                  </button>
+                )}{" "}
+                {/* Xóa khỏi nhóm - admin có thể xóa bất kỳ thành viên nào (trừ creator), moderator chỉ có thể xóa member thường */}
+                {((isAdmin && !isCurrentUser && !isCreator) ||
+                  (isModerator &&
+                    !isCurrentUser &&
+                    memberRole === "member")) && (
                   <button
                     className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center text-red-500"
                     onClick={() => handleRemoveMember(memberId)}
+                    title={
+                      isModerator && !isAdmin
+                        ? "Điều hành viên có thể xóa thành viên thường"
+                        : "Xóa thành viên khỏi nhóm"
+                    }
                   >
                     <UserMinus size={16} className="mr-2" />
                     <span>Xóa khỏi nhóm</span>
