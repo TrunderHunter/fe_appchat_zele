@@ -465,18 +465,18 @@ const useGroupStore = create(
           });
           throw error;
         }
-      },
-
-      // Cập nhật thông tin nhóm
-      updateGroup: async (groupId, updateData) => {
+      },      // Cập nhật thông tin nhóm
+      updateGroup: async (groupId, updateData, isFormData = false) => {
         set({ isLoading: true, error: null });
         try {
+          // Gọi API REST để cập nhật thông tin nhóm
           const updatedGroup = await groupService.updateGroup(
             groupId,
-            updateData
+            updateData,
+            isFormData
           );
 
-          // Cập nhật danh sách nhóm
+          // Cập nhật danh sách nhóm local
           set((state) => ({
             groups: state.groups.map((group) =>
               group._id === groupId ? updatedGroup : group
@@ -487,14 +487,15 @@ const useGroupStore = create(
                 : state.currentGroup,
             isLoading: false,
           }));
-
-          // Sử dụng socket để cập nhật real-time
-          const socket = socketManager.getSocket();
-          if (socket) {
+          
+          // Gửi thông báo qua socket với flag isNotify=true để báo cho các client khác
+          // mà không yêu cầu server phải cập nhật database lần nữa
+          const socket = socketManager.getSocket();          if (socket) {
             socket.emit("updateGroup", {
               groupId,
-              updateData,
+              updateData: {}, // Không cần gửi dữ liệu cập nhật vì đã cập nhật qua API
               userId: get().currentUser?._id,
+              isNotify: true // Flag đánh dấu đây chỉ là thông báo
             });
           }
 

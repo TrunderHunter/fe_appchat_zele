@@ -92,23 +92,35 @@ const groupService = {
       throw error;
     }
   },
-
   // Cập nhật thông tin nhóm
-  updateGroup: async (groupId, updateData) => {
+  updateGroup: async (groupId, updateData, isFormData = false) => {
     try {
-      const formData = new FormData();
+      let formData;
+      
+      // Nếu đã là FormData thì sử dụng trực tiếp
+      if (isFormData && updateData instanceof FormData) {
+        formData = updateData;
+      } else {
+        // Không thì tạo mới FormData
+        formData = new FormData();
 
-      // Thêm các trường cần cập nhật
-      if (updateData.name) {
-        formData.append("name", updateData.name);
-      }
+        // Thêm các trường cần cập nhật
+        if (updateData.name) {
+          formData.append("name", updateData.name);
+        }
 
-      if (updateData.description) {
-        formData.append("description", updateData.description);
-      }
+        if (updateData.description) {
+          formData.append("description", updateData.description);
+        }
 
-      if (updateData.settings) {
-        formData.append("settings", JSON.stringify(updateData.settings));
+        if (updateData.settings) {
+          formData.append("settings", JSON.stringify(updateData.settings));
+        }
+        
+        // Kiểm tra nếu có yêu cầu xóa avatar
+        if (updateData.removeAvatar) {
+          formData.append("removeAvatar", "true");
+        }
       }
 
       // Thêm avatar mới nếu có

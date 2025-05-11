@@ -18,10 +18,14 @@ import { toast } from "react-hot-toast";
 import useGroupStore from "../../stores/groupStore";
 import MemberListModal from "./MemberListModal";
 import TransferAdminModal from "./TransferAdminModal";
+import EditGroupNameModal from "./EditGroupNameModal";
+import EditGroupAvatarModal from "./EditGroupAvatarModal";
 
 const GroupInfoModal = ({ isOpen, onClose, group }) => {
   const [showMemberList, setShowMemberList] = useState(false);
   const [showTransferAdminModal, setShowTransferAdminModal] = useState(false);
+  const [showEditNameModal, setShowEditNameModal] = useState(false);
+  const [showEditAvatarModal, setShowEditAvatarModal] = useState(false);
   const { user } = useAuthStore();
   const {
     removeMember,
@@ -205,8 +209,7 @@ const GroupInfoModal = ({ isOpen, onClose, group }) => {
       }`;
 
   // Nếu modal không mở hoặc không có thông tin nhóm thì không hiển thị
-  if (!isOpen || !groupData) return null;
-  // Hiển thị danh sách thành viên khi nhấn vào mục thành viên
+  if (!isOpen || !groupData) return null;  // Hiển thị danh sách thành viên khi nhấn vào mục thành viên
   if (showMemberList) {
     return (
       <MemberListModal
@@ -217,6 +220,7 @@ const GroupInfoModal = ({ isOpen, onClose, group }) => {
       />
     );
   }
+  
   // Hiển thị modal chọn admin mới khi cần chuyển quyền admin
   if (showTransferAdminModal) {
     return (
@@ -235,6 +239,28 @@ const GroupInfoModal = ({ isOpen, onClose, group }) => {
           isOwnerTransfer={isCreator} // Truyền flag để biết đây là chuyển quyền sở hữu hay admin
         />
       </>
+    );
+  }
+  
+  // Hiển thị modal chỉnh sửa tên nhóm
+  if (showEditNameModal) {
+    return (
+      <EditGroupNameModal 
+        isOpen={showEditNameModal}
+        onClose={() => setShowEditNameModal(false)}
+        group={groupData}
+      />
+    );
+  }
+  
+  // Hiển thị modal chỉnh sửa ảnh đại diện nhóm
+  if (showEditAvatarModal) {
+    return (
+      <EditGroupAvatarModal
+        isOpen={showEditAvatarModal}
+        onClose={() => setShowEditAvatarModal(false)}
+        group={groupData}
+      />
     );
   }
 
@@ -256,8 +282,7 @@ const GroupInfoModal = ({ isOpen, onClose, group }) => {
         </div>
 
         {/* Group info */}
-        <div className="p-6 flex flex-col items-center border-b">
-          {/* Group avatar */}
+        <div className="p-6 flex flex-col items-center border-b">          {/* Group avatar */}
           <div className="relative w-24 h-24 mb-3">
             <div className="w-full h-full rounded-full overflow-hidden bg-gray-200 flex items-center justify-center">
               {groupData.avatar ? (
@@ -272,9 +297,15 @@ const GroupInfoModal = ({ isOpen, onClose, group }) => {
                 </div>
               )}
             </div>
-            <button className="absolute bottom-0 right-0 bg-white rounded-full p-1 border border-gray-200">
-              <MdCameraAlt size={20} />
-            </button>
+            {(isAdmin || isCreator) && (
+              <button 
+                className="absolute bottom-0 right-0 bg-white rounded-full p-1 border border-gray-200 hover:bg-gray-100"
+                onClick={() => setShowEditAvatarModal(true)}
+                title="Thay đổi ảnh đại diện"
+              >
+                <MdCameraAlt size={20} />
+              </button>
+            )}
           </div>
 
           {/* Group name */}
@@ -282,9 +313,15 @@ const GroupInfoModal = ({ isOpen, onClose, group }) => {
             <h2 className="font-semibold text-xl max-w-[90%] text-center truncate">
               {groupData.name}
             </h2>
-            <button className="ml-2 text-gray-400">
-              <MdEdit size={16} />
-            </button>
+            {(isAdmin || isCreator) && (
+              <button 
+                className="ml-2 text-gray-400 hover:text-gray-600"
+                onClick={() => setShowEditNameModal(true)}
+                title="Đổi tên nhóm"
+              >
+                <MdEdit size={16} />
+              </button>
+            )}
           </div>
 
           {/* Group creator info if available */}
