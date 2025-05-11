@@ -110,7 +110,37 @@ const useGroupSocket = () => {
           updated_at: data.group.updated_at,
         });
       }
-    }); // Xử lý khi thành viên bị xóa khỏi nhóm
+    });    // Lắng nghe khi có tin nhắn nhóm bị thu hồi
+    socket.on("messageRevoked", ({ messageId, is_revoked, isGroupMessage, conversationId }) => {
+      console.log("🔔 Group message revoked:", messageId, "in conversation:", conversationId);
+      
+      if (isGroupMessage && conversationId) {
+        // Cập nhật tin nhắn trong store để hiển thị trạng thái thu hồi
+        const { updateRevokedMessage } = useConversationStore.getState();
+        
+        // Kiểm tra xem tin nhắn này thuộc về cuộc trò chuyện nhóm hiện tại không
+        const { currentConversation } = useConversationStore.getState();
+        const isCurrentConversation = currentConversation && 
+                                    currentConversation._id === conversationId;
+        
+        // Log để debug
+        console.log(`Is message in current conversation: ${isCurrentConversation}`);
+        console.log(`Current conversation ID: ${currentConversation?._id}, Message conversation ID: ${conversationId}`);
+        
+        // Cập nhật trạng thái tin nhắn
+        updateRevokedMessage(messageId);
+        
+        // Chỉ hiển thị toast nếu đang ở trong cuộc trò chuyện nhóm này
+        if (isCurrentConversation) {
+          toast.success("Tin nhắn nhóm đã được thu hồi");
+        }
+        
+        // Đóng toast "đang thu hồi" nếu có
+        toast.dismiss("revoking");
+      }
+    });
+
+    // Xử lý khi thành viên bị xóa khỏi nhóm
     socket.on("memberRemovedFromGroup", (data) => {
       console.log("🔔 Socket event: memberRemovedFromGroup", data);
       handleMemberRemoved(data);
@@ -217,7 +247,7 @@ const useGroupSocket = () => {
       } catch (err) {
         console.error("Cannot close modals:", err);
       }
-    });    // Xử lý khi vai trò thành viên thay đổi
+    }); // Xử lý khi vai trò thành viên thay đổi
     socket.on("memberRoleChanged", (data) => {
       console.log("🔔 Socket event: memberRoleChanged", data);
       handleRoleChanged(data);
@@ -243,10 +273,15 @@ const useGroupSocket = () => {
       }
       // Xử lý trường hợp hạ quyền admin xuống thành viên thường
       else if (data.previousRole === "admin" && data.newRole === "member") {
-        toast(`${isCurrentUser ? "Bạn" : "Trưởng nhóm cũ"} đã chuyển thành thành viên thường`, {
-          icon: "ℹ️",
-          duration: 4000,
-        });
+        toast(
+          `${
+            isCurrentUser ? "Bạn" : "Trưởng nhóm cũ"
+          } đã chuyển thành thành viên thường`,
+          {
+            icon: "ℹ️",
+            duration: 4000,
+          }
+        );
       }
       // Xử lý trường hợp gán quyền moderator
       else if (data.newRole === "moderator") {
@@ -410,17 +445,49 @@ const useGroupSocket = () => {
     socket.on("inviteLinkStatusUpdated", (data) => {
       console.log("🔔 Socket event: inviteLinkStatusUpdated", data);
       // Có thể thêm xử lý cập nhật trạng thái liên kết mời ở đây
-    });
-
-    // Xử lý khi liên kết mời được tạo lại
+    });    // Xử lý khi liên kết mời được tạo lại
     socket.on("inviteLinkRegenerated", (data) => {
       console.log("🔔 Socket event: inviteLinkRegenerated", data);
       // Có thể thêm xử lý cập nhật liên kết mời mới ở đây
     });
-
-    // Lắng nghe các lỗi từ server
+    
+    // Lắng nghe khi có tin nhắn bị thu hồi (đặc biệt là trong nhóm)
+    socket.on("messageRevoked", ({ messageId, is_revoked, isGroupMessage, conversationId }) => {
+      console.log("🔔 Group Socket: Message revoked:", messageId, "isGroupMessage:", isGroupMessage);
+      // Cập nhật tin nhắn trong store để hiển thị trạng thái thu hồi
+      const { updateRevokedMessage } = useConversationStore.getState();
+      updateRevokedMessage(messageId);
+      
+      // Hiển thị thông báo chỉ khi đây là tin nhắn nhóm
+      if (isGroupMessage) {
+        toast.success("Tin nhắn nhóm đã được thu hồi");
+      }
+    }); // Lắng nghe các lỗi từ server
     socket.on("error", (error) => {
       console.error("Socket error received:", error);
+      // Xử lý lỗi revokeMessage đặc biệt
+      if (error === "Error revoking message") {
+        toast.dismiss("revoking");
+        toast.error(
+          "Không thể thu hồi tin nhắn, bạn chỉ có thể thu hồi tin nhắn của mình"
+        );
+        return;
+      }
+
+      // Xử lý lỗi tin nhắn không tồn tại
+      if (error === "Message not found") {
+        toast.dismiss("revoking");
+        toast.error("Tin nhắn không tồn tại hoặc đã bị xóa");
+        return;
+      }
+
+      // Xử lý lỗi không có quyền thu hồi tin nhắn
+      if (error === "You are not allowed to revoke this message") {
+        toast.dismiss("revoking");
+        toast.error("Bạn không có quyền thu hồi tin nhắn này");
+        return;
+      }
+
       // Chỉ hiển thị lỗi nếu là lỗi quan trọng
       if (typeof error === "object" && error.message) {
         if (
@@ -429,6 +496,9 @@ const useGroupSocket = () => {
         ) {
           toast.error(`Lỗi: ${error.message}`);
         }
+      } else if (typeof error === "string") {
+        // Xử lý lỗi chuỗi không được xử lý bởi các điều kiện trên
+        toast.error(`Lỗi: ${error}`);
       }
     });
 
@@ -445,10 +515,10 @@ const useGroupSocket = () => {
       socket.off("conversationInfoUpdated");
       socket.off("newGroupCreated");
       socket.off("groupDeleted");
-      socket.off("joinedGroupViaLink");
-      socket.off("memberJoinedViaLink");
+      socket.off("joinedGroupViaLink");      socket.off("memberJoinedViaLink");
       socket.off("inviteLinkStatusUpdated");
       socket.off("inviteLinkRegenerated");
+      socket.off("messageRevoked");
       socket.off("newConversation");
       socket.off("error");
       unsubscribe(); // Hủy đăng ký theo dõi thay đổi trạng thái kết nối

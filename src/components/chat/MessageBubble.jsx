@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import toast from "react-hot-toast";
+import socketManager from "../../services/SocketManager";
+import useAuthStore from "../../stores/authStore";
 import {
   BsCheck2All,
   BsHandThumbsUp,
@@ -19,7 +21,7 @@ import { IoIosStarOutline } from "react-icons/io";
 import { BsListCheck } from "react-icons/bs";
 
 const MessageBubble = ({ message, isMe }) => {
-  const { text, time, status, type, fileUrl, senderName, senderAvatar, id } =
+  const { text, time, status, type, fileUrl, senderName, senderAvatar, _id } =
     message;
   const [showControls, setShowControls] = useState(false);
   const [showMessageActions, setShowMessageActions] = useState(false);
@@ -35,12 +37,12 @@ const MessageBubble = ({ message, isMe }) => {
       setLikeCount((prevCount) => prevCount + 1);
       toast.success("Đã thích tin nhắn");
       // Ở đây có thể gọi API để lưu phản ứng vào cơ sở dữ liệu
-      // Ví dụ: likeMessage(message.id)
+      // Ví dụ: likeMessage(message._id)
     } else {
       setIsLiked(false);
       setLikeCount((prevCount) => Math.max(0, prevCount - 1));
       // Gọi API để bỏ thích tin nhắn
-      // Ví dụ: unlikeMessage(message.id)
+      // Ví dụ: unlikeMessage(message._id)
     }
   };
 
@@ -81,9 +83,36 @@ const MessageBubble = ({ message, isMe }) => {
     toast.success("Đã báo cáo tin nhắn");
     setShowPopup(false);
   };
-
   const handleRevoke = () => {
-    toast.success("Đã thu hồi tin nhắn");
+    // Sử dụng socket để thu hồi tin nhắn
+    const socket = socketManager.getSocket();
+    const userId = useAuthStore.getState().user._id;
+
+    if (socket) {
+      console.log(`Emitting revokeMessage for message: ${_id}`);
+
+      // Đảm bảo rằng _id tồn tại và có giá trị
+      if (!_id) {
+        toast.error("Không thể thu hồi tin nhắn: ID tin nhắn không hợp lệ");
+        setShowPopup(false);
+        return;
+      }
+
+      socket.emit("revokeMessage", {
+        messageId: _id,
+        userId: userId,
+      });
+
+      // Thêm xử lý lỗi và thông báo rõ ràng cho người dùng
+      toast.loading("Đang thu hồi tin nhắn...", { id: "revoking" });
+
+      // Đặt timeout để kiểm tra nếu không nhận được phản hồi sau 3 giây
+      setTimeout(() => {
+        toast.dismiss("revoking");
+      }, 3000);
+    } else {
+      toast.error("Không thể thu hồi tin nhắn, vui lòng thử lại sau");
+    }
     setShowPopup(false);
   };
 

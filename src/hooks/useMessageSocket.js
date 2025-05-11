@@ -103,13 +103,17 @@ const useMessageSocket = () => {
           console.error("Error fetching conversations after update:", err);
         });
       }
-    );
-
-    // Lắng nghe khi có tin nhắn bị thu hồi
-    socket.on("messageRevoked", ({ messageId, is_revoked }) => {
-      console.log("🔔 Message revoked:", messageId);
-      // Cập nhật UI để hiển thị tin nhắn đã bị thu hồi
-      // Có thể thêm logic xử lý tin nhắn bị thu hồi ở đây
+    );    // Lắng nghe khi có tin nhắn bị thu hồi
+    socket.on("messageRevoked", ({ messageId, is_revoked, isGroupMessage, conversationId }) => {
+      console.log("🔔 Message revoked:", messageId, isGroupMessage ? "(group message)" : "(direct message)");
+      // Chỉ xử lý tin nhắn cá nhân ở đây, tin nhắn nhóm được xử lý trong useGroupSocket
+      if (!isGroupMessage) {
+        // Cập nhật tin nhắn trong store để hiển thị trạng thái thu hồi
+        const { updateRevokedMessage } = useConversationStore.getState();
+        updateRevokedMessage(messageId);
+        toast.success("Tin nhắn đã được thu hồi");
+        toast.dismiss("revoking");
+      }
     });
 
     // Lắng nghe khi trạng thái tin nhắn thay đổi
@@ -122,6 +126,29 @@ const useMessageSocket = () => {
     // Lắng nghe các lỗi từ server
     socket.on("error", (error) => {
       console.error("Socket error received:", error);
+      // Xử lý lỗi revokeMessage đặc biệt
+      if (error === "Error revoking message") {
+        toast.dismiss("revoking");
+        toast.error(
+          "Không thể thu hồi tin nhắn, bạn chỉ có thể thu hồi tin nhắn của mình"
+        );
+        return;
+      }
+
+      // Xử lý lỗi tin nhắn không tồn tại
+      if (error === "Message not found") {
+        toast.dismiss("revoking");
+        toast.error("Tin nhắn không tồn tại hoặc đã bị xóa");
+        return;
+      }
+
+      // Xử lý lỗi không có quyền thu hồi tin nhắn
+      if (error === "You are not allowed to revoke this message") {
+        toast.dismiss("revoking");
+        toast.error("Bạn không có quyền thu hồi tin nhắn này");
+        return;
+      }
+
       // Chỉ hiển thị lỗi nếu là lỗi quan trọng
       if (typeof error === "object" && error.message) {
         if (
@@ -130,6 +157,9 @@ const useMessageSocket = () => {
         ) {
           toast.error(`Lỗi: ${error.message}`);
         }
+      } else if (typeof error === "string") {
+        // Xử lý lỗi chuỗi không được xử lý bởi các điều kiện trên
+        toast.error(`Lỗi: ${error}`);
       }
     });
 

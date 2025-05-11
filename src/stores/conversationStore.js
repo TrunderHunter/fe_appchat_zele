@@ -481,6 +481,49 @@ const useConversationStore = create(
               ? { ...state.currentConversation, participants }
               : state.currentConversation,
         }));
+      },      // Cập nhật tin nhắn bị thu hồi
+      updateRevokedMessage: (messageId) => {
+        if (!messageId) {
+          console.warn("updateRevokedMessage called with invalid messageId");
+          return;
+        }
+
+        console.log("Updating revoked message:", messageId);
+
+        // Cập nhật trong danh sách tin nhắn hiện tại
+        set((state) => {
+          // Debug để kiểm tra xem tin nhắn có tồn tại trong danh sách hiện tại không
+          const messageExists = state.currentMessages.some(msg => msg._id === messageId);
+          console.log(`Message ${messageId} exists in currentMessages: ${messageExists}`);
+          
+          return {
+            currentMessages: state.currentMessages.map((msg) =>
+              msg._id === messageId ? { ...msg, is_revoked: true } : msg
+            ),
+          };
+        });
+
+        // Cập nhật trong danh sách cuộc trò chuyện nếu tin nhắn bị thu hồi là tin nhắn cuối cùng
+        set((state) => {
+          // Kiểm tra và log các cuộc trò chuyện có tin nhắn cuối cùng là tin nhắn này
+          const relevantConvs = state.conversations.filter(
+            conv => conv.last_message && conv.last_message._id === messageId
+          );
+          console.log(`Found ${relevantConvs.length} conversations with last_message ID ${messageId}`);
+          
+          return {
+            conversations: state.conversations.map((conv) => {
+              if (conv.last_message && conv.last_message._id === messageId) {
+                console.log(`Updating last_message in conversation: ${conv._id}`);
+                return {
+                  ...conv,
+                  last_message: { ...conv.last_message, is_revoked: true },
+                };
+              }
+              return conv;
+            }),
+          };
+        });
       },
 
       // Xóa một cuộc trò chuyện (khi thành viên bị xóa khỏi nhóm hoặc nhóm bị xóa)

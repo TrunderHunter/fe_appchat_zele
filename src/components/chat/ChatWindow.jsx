@@ -241,7 +241,7 @@ const ChatWindow = ({ conversation }) => {
                 <MessageBubble
                   key={message._id}
                   message={{
-                    id: message._id,
+                    _id: message._id, // Thay đổi id thành _id để đảm bảo nhất quán
                     senderId:
                       typeof message.sender_id === "object"
                         ? message.sender_id._id
