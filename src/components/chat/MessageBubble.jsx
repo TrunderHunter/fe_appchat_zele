@@ -1,18 +1,270 @@
+import { useState, useEffect, useRef } from "react";
+import toast from "react-hot-toast";
 import {
-  CheckCheck,
-  ThumbsUp,
-  MoreHorizontal,
-  File,
-  Image as ImageIcon,
-  Video,
-  Mic,
-} from "lucide-react";
-import { useState } from "react";
+  BsCheck2All,
+  BsHandThumbsUp,
+  BsHandThumbsUpFill,
+  BsFiletypeDocx,
+  BsMic,
+  BsReply,
+  BsClipboard,
+  BsTrash,
+  BsReplyAll,
+} from "react-icons/bs";
+import { MdOutlineContentCopy, MdKeyboardArrowRight } from "react-icons/md";
+import { AiOutlineExclamationCircle } from "react-icons/ai";
+import { PiDotsThreeCircleLight } from "react-icons/pi";
+import { TiPinOutline } from "react-icons/ti";
+import { IoIosStarOutline } from "react-icons/io";
+import { BsListCheck } from "react-icons/bs";
 
 const MessageBubble = ({ message, isMe }) => {
-  const { text, time, status, type, fileUrl, senderName, senderAvatar } =
+  const { text, time, status, type, fileUrl, senderName, senderAvatar, id } =
     message;
   const [showControls, setShowControls] = useState(false);
+  const [showMessageActions, setShowMessageActions] = useState(false);
+  const [showPopup, setShowPopup] = useState(false);
+  const [popupPosition, setPopupPosition] = useState("bottom"); // "bottom" or "top"
+  const popupRef = useRef(null);
+  const buttonRef = useRef(null);
+  const [isLiked, setIsLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(message.likes?.length || 0);
+  const handleLike = () => {
+    if (!isLiked) {
+      setIsLiked(true);
+      setLikeCount((prevCount) => prevCount + 1);
+      toast.success("Đã thích tin nhắn");
+      // Ở đây có thể gọi API để lưu phản ứng vào cơ sở dữ liệu
+      // Ví dụ: likeMessage(message.id)
+    } else {
+      setIsLiked(false);
+      setLikeCount((prevCount) => Math.max(0, prevCount - 1));
+      // Gọi API để bỏ thích tin nhắn
+      // Ví dụ: unlikeMessage(message.id)
+    }
+  };
+
+  const handleReply = () => {
+    toast.success("Trả lời tin nhắn");
+    // Xử lý trả lời tin nhắn
+    // Có thể emit một sự kiện hoặc gọi hàm callback
+  };
+
+  const handleForward = () => {
+    toast.success("Chuyển tiếp tin nhắn");
+    // Xử lý chuyển tiếp tin nhắn
+  };
+
+  const handleCopy = () => {
+    const content = type === "text" ? text : fileUrl;
+    navigator.clipboard.writeText(content);
+    toast.success("Đã sao chép nội dung tin nhắn");
+  };
+  const handleDelete = () => {
+    toast.success("Đã xóa tin nhắn");
+    setShowPopup(false);
+    // Xử lý xóa tin nhắn
+    // Gọi API để xóa tin nhắn
+  };
+
+  const handlePin = () => {
+    toast.success("Đã ghim tin nhắn");
+    setShowPopup(false);
+  };
+
+  const handleBookmark = () => {
+    toast.success("Đã đánh dấu tin nhắn");
+    setShowPopup(false);
+  };
+
+  const handleReport = () => {
+    toast.success("Đã báo cáo tin nhắn");
+    setShowPopup(false);
+  };
+
+  const handleRevoke = () => {
+    toast.success("Đã thu hồi tin nhắn");
+    setShowPopup(false);
+  };
+
+  const togglePopup = (e) => {
+    e.stopPropagation(); // Ngăn chặn sự kiện lan ra ngoài
+
+    if (!showPopup) {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      const windowHeight = window.innerHeight;
+      const spaceBelow = windowHeight - (rect?.bottom || 0);
+
+      // Kiểm tra xem có đủ không gian phía dưới để hiển thị popup không (> 200px)
+      setPopupPosition(spaceBelow > 200 ? "bottom" : "top");
+    }
+
+    setShowPopup(!showPopup);
+  };
+
+  // Đóng popup khi click bên ngoài
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        popupRef.current &&
+        !popupRef.current.contains(event.target) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(event.target)
+      ) {
+        setShowPopup(false);
+      }
+    };
+
+    if (showPopup) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showPopup]);
+
+  // Render các nút công cụ khi hover vào tin nhắn
+
+  const renderMessageActions = () => {
+    return (
+      <div
+        className={`absolute ${
+          isMe ? "right-full mr-2" : "left-full ml-2"
+        } top-1/2 transform -translate-y-1/2 flex bg-white rounded-lg shadow-md p-1 z-10 
+                    ${
+                      showMessageActions
+                        ? "opacity-100 visible scale-100"
+                        : "opacity-0 invisible scale-95"
+                    } 
+                    transition-all duration-200 ease-in-out`}
+        data-tooltip="Các tùy chọn"
+      >
+        <button
+          className="p-1.5 mx-0.5 hover:bg-gray-100 rounded-full transition-colors duration-150 flex items-center justify-center"
+          onClick={handleReply}
+          title="Trả lời"
+        >
+          <BsReply size={15} className="text-gray-600" />
+        </button>
+        <button
+          className="p-1.5 mx-0.5 hover:bg-gray-100 rounded-full transition-colors duration-150 flex items-center justify-center"
+          onClick={handleForward}
+          title="Chuyển tiếp"
+        >
+          <BsReplyAll size={15} className="text-gray-600" />
+        </button>
+        <button
+          className="p-1.5 mx-0.5 hover:bg-gray-100 rounded-full transition-colors duration-150 flex items-center justify-center"
+          onClick={handleCopy}
+          title="Sao chép"
+        >
+          <MdOutlineContentCopy size={15} className="text-gray-600" />
+        </button>
+        <button
+          ref={buttonRef}
+          className="p-1.5 mx-0.5 hover:bg-gray-50 rounded-full transition-colors duration-150 flex items-center justify-center"
+          onClick={togglePopup}
+          title="Thêm tùy chọn"
+        >
+          <PiDotsThreeCircleLight size={16} className="text-gray-600" />
+        </button>{" "}
+        <div className="relative">
+          {/* Popup Menu */}
+          {showPopup && (
+            <div
+              ref={popupRef}
+              className={`absolute ${
+                popupPosition === "bottom"
+                  ? "top-full mt-1"
+                  : "bottom-full mb-1"
+              } right-0 bg-white rounded-lg shadow-lg z-50 py-1 w-56`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex flex-col divide-y divide-gray-100">
+                <button
+                  className="flex items-center px-4 py-2.5 hover:bg-gray-50 w-full text-left text-black"
+                  onClick={handleCopy}
+                >
+                  <MdOutlineContentCopy
+                    className="mr-3 text-gray-600"
+                    size={16}
+                  />
+                  <span className="text-sm">Sao chép tin nhắn</span>
+                </button>
+
+                <button
+                  className="flex items-center px-4 py-2.5 hover:bg-gray-50 w-full text-left text-black"
+                  onClick={handlePin}
+                >
+                  <TiPinOutline className="mr-3 text-gray-600" size={16} />
+                  <span className="text-sm">Ghim tin nhắn</span>
+                </button>
+
+                <button
+                  className="flex items-center px-4 py-2.5 hover:bg-gray-50 w-full text-left text-black"
+                  onClick={handleBookmark}
+                >
+                  <IoIosStarOutline className="mr-3 text-gray-600" size={16} />
+                  <span className="text-sm">Đánh dấu tin nhắn</span>
+                </button>
+
+                <button
+                  className="flex items-center px-4 py-2.5 hover:bg-gray-50 w-full text-left text-black"
+                  onClick={handleForward}
+                >
+                  <BsListCheck className="mr-3 text-gray-600" size={16} />
+                  <span className="text-sm">Chọn nhiều tin nhắn</span>
+                </button>
+
+                <button
+                  className="flex items-center px-4 py-2.5 hover:bg-gray-50 w-full text-left text-black"
+                  onClick={handleReport}
+                >
+                  <AiOutlineExclamationCircle
+                    className="mr-3 text-gray-600"
+                    size={16}
+                  />
+                  <span className="text-sm">Xem chi tiết</span>
+                </button>
+
+                <button
+                  className="flex items-center px-4 py-2.5 hover:bg-gray-50 w-full text-left text-black"
+                  onClick={handleReport}
+                >
+                  <span className="text-sm ml-7">Tùy chọn khác</span>
+                  <MdKeyboardArrowRight
+                    className="mr-3 text-gray-600 ml-auto"
+                    size={16}
+                  />
+                </button>
+
+                {isMe && (
+                  <button
+                    className="flex items-center px-4 py-2.5 hover:bg-gray-50 w-full text-left text-red-500"
+                    onClick={handleRevoke}
+                  >
+                    <BsTrash className="mr-3 text-red-500" size={16} />
+                    <span className="text-sm">Thu hồi</span>
+                  </button>
+                )}
+
+                {isMe && (
+                  <button
+                    className="flex items-center px-4 py-2.5 hover:bg-gray-50 w-full text-left text-red-500"
+                    onClick={handleDelete}
+                  >
+                    <BsTrash className="mr-3 text-red-500" size={16} />
+                    <span className="text-sm">Xóa chỉ ở phía tôi</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   const renderMessageContent = () => {
     // Nếu tin nhắn bị thu hồi
@@ -50,7 +302,7 @@ const MessageBubble = ({ message, isMe }) => {
         return (
           <div className="flex items-center mb-1">
             <div className="mr-2">
-              <File size={24} />
+              <BsFiletypeDocx size={24} />
             </div>
             <a
               href={fileUrl}
@@ -66,7 +318,7 @@ const MessageBubble = ({ message, isMe }) => {
         return (
           <div className="mb-1">
             <div className="flex items-center">
-              <Mic size={20} className="mr-2" />
+              <BsMic size={20} className="mr-2" />
               <audio controls className="h-8">
                 <source src={fileUrl} />
               </audio>
@@ -85,12 +337,11 @@ const MessageBubble = ({ message, isMe }) => {
         <div className="text-sm font-medium text-gray-700 ml-12 mb-1">
           {senderName}
         </div>
-      )}
-
+      )}{" "}
       <div
-        className={`flex mb-2 ${
+        className={`flex mb-3 ${
           isMe ? "justify-end" : "justify-start"
-        } items-end`}
+        } items-end group relative hover:z-10`}
         onMouseEnter={() => setShowControls(true)}
         onMouseLeave={() => setShowControls(false)}
       >
@@ -110,35 +361,93 @@ const MessageBubble = ({ message, isMe }) => {
           </div>
         )}
 
-        <div
-          className={`max-w-[70%] px-4 py-2 ${
-            isMe
-              ? "bg-blue-500 text-white rounded-t-2xl rounded-l-2xl rounded-br-md"
-              : "bg-gray-100 text-black rounded-t-2xl rounded-r-2xl rounded-bl-md"
-          }`}
-        >
-          <div className="flex flex-col">
-            {renderMessageContent()}
+        {/* Container để định vị cả tin nhắn và nút like */}
+        <div className="relative max-w-[70%]">
+          {/* Nội dung tin nhắn */}
+          <div
+            className={`w-full px-4 py-2 relative group/msg ${
+              isMe
+                ? "bg-blue-500 text-white rounded-t-2xl rounded-l-2xl rounded-br-md"
+                : "bg-gray-100 text-black rounded-t-2xl rounded-r-2xl rounded-bl-md"
+            } hover:shadow-sm transition-shadow duration-200`}
+            onMouseEnter={() => {
+              setShowMessageActions(true);
+              setShowControls(true);
+            }}
+            onMouseLeave={() => {
+              setShowMessageActions(false);
+              setShowControls(false);
+            }}
+          >
+            {renderMessageActions()}
 
-            <div className="flex items-center justify-end gap-1 mt-1">
-              <span className="text-xs opacity-70 whitespace-nowrap">
-                {time}
-              </span>
+            <div className="flex flex-col">
+              {renderMessageContent()}
 
-              {isMe && (
-                <span className="ml-1">
-                  {status === "delivered" && (
-                    <CheckCheck size={12} className="opacity-70" />
-                  )}
-                  {status === "seen" && (
-                    <CheckCheck
-                      size={12}
-                      className={isMe ? "text-white" : "text-blue-400"}
-                    />
-                  )}
-                </span>
-              )}
+              <div className="flex items-center justify-end gap-1 mt-1">
+                <span className="text-xs opacity-70 whitespace-nowrap">
+                  {time}
+                </span>{" "}
+                {isMe && (
+                  <span className="ml-1">
+                    {status === "delivered" && (
+                      <BsCheck2All size={12} className="opacity-70" />
+                    )}
+                    {status === "seen" && (
+                      <BsCheck2All
+                        size={12}
+                        className={isMe ? "text-white" : "text-blue-400"}
+                      />
+                    )}
+                  </span>
+                )}
+              </div>
             </div>
+          </div>
+          {/* Nút like với vị trí thống nhất ở góc dưới bên phải */}
+          <div
+            className={`absolute bottom-[-16px] right-[-2px] ${
+              showPopup
+                ? "hidden"
+                : likeCount > 0 || isLiked
+                ? "opacity-100"
+                : "opacity-0 group-hover:opacity-100"
+            } transition-all duration-200 flex items-center z-10`}
+          >
+            <button
+              onClick={handleLike}
+              className={`rounded-full p-1.5 transform hover:scale-110 active:scale-95 transition-all ${
+                isMe ? "bg-blue-600" : "bg-white"
+              } shadow-md hover:shadow-lg border-2 ${
+                isLiked
+                  ? isMe
+                    ? "border-white"
+                    : "border-blue-500"
+                  : "border-transparent"
+              }`}
+              title={isLiked ? "Bỏ thích tin nhắn" : "Thích tin nhắn"}
+            >
+              {isLiked ? (
+                <BsHandThumbsUpFill
+                  size={16}
+                  className={isMe ? "text-white" : "text-blue-600"}
+                />
+              ) : (
+                <BsHandThumbsUp
+                  size={16}
+                  className={isMe ? "text-white" : "text-blue-500"}
+                />
+              )}{" "}
+            </button>
+            {likeCount > 0 && (
+              <span
+                className={`ml-1.5 text-xs font-bold px-2 py-0.5 rounded-full ${
+                  isMe ? "bg-blue-700 text-white" : "bg-white text-blue-600"
+                } shadow-md border border-gray-200`}
+              >
+                {likeCount}
+              </span>
+            )}
           </div>
         </div>
       </div>
