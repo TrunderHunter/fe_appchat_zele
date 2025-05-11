@@ -141,16 +141,6 @@ const MessageBubble = ({ message, isMe }) => {
             </div>
           </div>
         </div>
-
-        <div className="flex items-center px-2">
-          <button
-            className={`text-gray-400 hover:bg-gray-100 p-1 rounded-full ${
-              showControls ? "opacity-100" : "opacity-0"
-            } transition-opacity`}
-          >
-            <MoreHorizontal size={16} />
-          </button>
-        </div>
       </div>
     </div>
   );
