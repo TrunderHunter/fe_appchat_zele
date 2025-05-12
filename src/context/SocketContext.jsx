@@ -1,6 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
 import useAuthStore from "../stores/authStore";
-import useFriendRequestSocket from "../hooks/useFriendRequestSocket";
 import socketManager from "../services/SocketManager";
 
 const SocketContext = createContext();
@@ -29,10 +28,8 @@ export const SocketProvider = ({ children }) => {
       }
     };
   }, []); // Chỉ chạy một lần khi mount
-
-  // Truyền socket vào hook xử lý friend request
+  // Lưu trữ socket để truyền qua context
   const socket = socketManager.getSocket();
-  useFriendRequestSocket(socket);
 
   const value = {
     socket,

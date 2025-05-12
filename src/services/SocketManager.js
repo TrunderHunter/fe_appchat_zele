@@ -64,7 +64,6 @@ class SocketManager {
       reconnectionDelayMax: 5000,
       timeout: 20000,
     });
-
     this.socket.on("connect", () => {
       // Đánh dấu kết thúc khởi tạo khi kết nối thành công
       isInitializing = false;
@@ -72,6 +71,9 @@ class SocketManager {
 
       console.log("Socket connected with ID:", this.socket.id);
       this.isConnected = true;
+
+      // Lưu thông tin user vào socket để dễ truy cập
+      this.socket.auth = { user: { id: userId } };
 
       // Đăng ký userId với socket server
       this.socket.emit("registerUser", userId);

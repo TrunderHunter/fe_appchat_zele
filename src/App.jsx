@@ -19,6 +19,7 @@ import ProfileModal from "./components/user/ProfileModal";
 import socketManager from "./services/SocketManager";
 import useMessageSocket from "./hooks/useMessageSocket";
 import useGroupSocket from "./hooks/useGroupSocket";
+import useFriendRequestSocket from "./hooks/useFriendRequestSocket";
 
 function App() {
   const { checkAuth, user, isAuthenticated } = useAuthStore();
@@ -40,10 +41,10 @@ function App() {
       socketManager.disconnect();
     }
   }, [isAuthenticated, user?._id]); // Chỉ phụ thuộc vào trạng thái đăng nhập và ID
-
-  // Khởi tạo socket cho các sự kiện tin nhắn
+  // Khởi tạo socket cho các sự kiện tin nhắn, nhóm và lời mời kết bạn
   useMessageSocket();
   useGroupSocket();
+  useFriendRequestSocket();
 
   // Thêm listener cho sự kiện popstate (back/forward trong trình duyệt)
   useEffect(() => {
