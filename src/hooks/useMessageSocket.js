@@ -49,11 +49,65 @@ const useMessageSocket = () => {
 
     // Lắng nghe khi có tin nhắn nhóm mới
     socket.on("receiveGroupMessage", ({ message, conversationId }) => {
-      console.log("🔔 Received new group message via socket:", {
+      console.log("🔔 Received new group message via socket:", message);
+      addNewMessage(message, conversationId);
+    });
+
+    // Lắng nghe khi có tin nhắn được chuyển tiếp đến cá nhân
+    socket.on("messageForwarded", ({ message, conversation }) => {
+      console.log("🔔 Received forwarded message via socket:", message);
+
+      // Kiểm tra nếu cuộc trò chuyện là mới
+      if (
+        !useConversationStore
+          .getState()
+          .conversations.find((conv) => conv._id === conversation._id)
+      ) {
+        addNewConversation(conversation);
+      }
+
+      // Thêm tin nhắn vào cuộc trò chuyện
+      addNewMessage(message);
+
+      // Cập nhật tin nhắn cuối cùng của cuộc trò chuyện
+      updateLastMessage(conversation._id, message);
+
+      // Hiển thị thông báo nếu người nhận là người đăng nhập hiện tại
+      if (message.receiver_id === user?._id) {
+        toast.success("Bạn vừa nhận được một tin nhắn đã chuyển tiếp");
+      }
+    });
+    // Lắng nghe khi có tin nhắn được chuyển tiếp đến nhóm
+    socket.on("groupMessageForwarded", ({ message, group, conversationId }) => {
+      console.log(
+        "🔔 Received group forwarded message via socket:",
         message,
-        conversationId,
-      });
-      addNewMessage({ ...message, conversation_id: conversationId });
+        "conversationId:",
+        conversationId
+      );
+
+      // Thêm tin nhắn vào cuộc trò chuyện nhóm
+      // Ưu tiên sử dụng conversationId được cung cấp trực tiếp
+      const targetConversationId = conversationId || message.conversation_id;
+
+      if (targetConversationId) {
+        console.log("Adding message to conversation:", targetConversationId);
+        addNewMessage(message, targetConversationId);
+
+        // Cập nhật tin nhắn cuối cùng của cuộc trò chuyện
+        updateLastMessage(targetConversationId, message);
+      } else {
+        console.error("No conversation ID found for forwarded group message");
+      }
+
+      // Hiển thị thông báo
+      toast.success(`Tin nhắn đã được chuyển tiếp đến nhóm ${group.name}`);
+    });
+
+    // Lắng nghe lỗi khi chuyển tiếp tin nhắn
+    socket.on("messageForwardError", ({ error }) => {
+      console.error("Error forwarding message:", error);
+      toast.error(`Lỗi khi chuyển tiếp tin nhắn: ${error}`);
     });
 
     // Lắng nghe khi có cuộc trò chuyện mới
@@ -103,18 +157,25 @@ const useMessageSocket = () => {
           console.error("Error fetching conversations after update:", err);
         });
       }
-    );    // Lắng nghe khi có tin nhắn bị thu hồi
-    socket.on("messageRevoked", ({ messageId, is_revoked, isGroupMessage, conversationId }) => {
-      console.log("🔔 Message revoked:", messageId, isGroupMessage ? "(group message)" : "(direct message)");
-      // Chỉ xử lý tin nhắn cá nhân ở đây, tin nhắn nhóm được xử lý trong useGroupSocket
-      if (!isGroupMessage) {
-        // Cập nhật tin nhắn trong store để hiển thị trạng thái thu hồi
-        const { updateRevokedMessage } = useConversationStore.getState();
-        updateRevokedMessage(messageId);
-        toast.success("Tin nhắn đã được thu hồi");
-        toast.dismiss("revoking");
+    ); // Lắng nghe khi có tin nhắn bị thu hồi
+    socket.on(
+      "messageRevoked",
+      ({ messageId, is_revoked, isGroupMessage, conversationId }) => {
+        console.log(
+          "🔔 Message revoked:",
+          messageId,
+          isGroupMessage ? "(group message)" : "(direct message)"
+        );
+        // Chỉ xử lý tin nhắn cá nhân ở đây, tin nhắn nhóm được xử lý trong useGroupSocket
+        if (!isGroupMessage) {
+          // Cập nhật tin nhắn trong store để hiển thị trạng thái thu hồi
+          const { updateRevokedMessage } = useConversationStore.getState();
+          updateRevokedMessage(messageId);
+          toast.success("Tin nhắn đã được thu hồi");
+          toast.dismiss("revoking");
+        }
       }
-    });
+    );
 
     // Lắng nghe khi trạng thái tin nhắn thay đổi
     socket.on("messageStatusUpdated", ({ messageId, status }) => {
@@ -168,6 +229,9 @@ const useMessageSocket = () => {
       console.log("useMessageSocket: Cleaning up socket listeners");
       socket.off("receiveMessage");
       socket.off("receiveGroupMessage");
+      socket.off("messageForwarded");
+      socket.off("groupMessageForwarded");
+      socket.off("messageForwardError");
       socket.off("newConversation");
       socket.off("updateLastMessage");
       socket.off("conversationInfoUpdated");

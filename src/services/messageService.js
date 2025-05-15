@@ -103,6 +103,19 @@ const messageService = {
       throw error;
     }
   },
+
+  // Chuyển tiếp tin nhắn
+  forwardMessage: async (receiverId, originalMessageId, isGroup = false) => {
+    try {
+      return await api.post("/message/forward", {
+        receiverId,
+        originalMessageId,
+        isGroup,
+      });
+    } catch (error) {
+      throw error;
+    }
+  },
 };
 
 export default messageService;

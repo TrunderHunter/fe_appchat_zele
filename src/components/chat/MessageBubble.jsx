@@ -19,10 +19,21 @@ import { PiDotsThreeCircleLight } from "react-icons/pi";
 import { TiPinOutline } from "react-icons/ti";
 import { IoIosStarOutline } from "react-icons/io";
 import { BsListCheck } from "react-icons/bs";
+import ForwardMessageModal from "./ForwardMessageModal";
 
 const MessageBubble = ({ message, isMe }) => {
-  const { text, time, status, type, fileUrl, senderName, senderAvatar, _id } =
-    message;
+  // Trích xuất thông tin tin nhắn, đảm bảo xử lý cả tin nhắn thường và tin nhắn chuyển tiếp
+  const {
+    text,
+    time,
+    status,
+    type,
+    fileUrl,
+    senderName,
+    senderAvatar,
+    _id,
+    file_meta,
+  } = message;
   const [showControls, setShowControls] = useState(false);
   const [showMessageActions, setShowMessageActions] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
@@ -31,6 +42,8 @@ const MessageBubble = ({ message, isMe }) => {
   const buttonRef = useRef(null);
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(message.likes?.length || 0);
+  const [showForwardModal, setShowForwardModal] = useState(false);
+
   const handleLike = () => {
     if (!isLiked) {
       setIsLiked(true);
@@ -53,8 +66,8 @@ const MessageBubble = ({ message, isMe }) => {
   };
 
   const handleForward = () => {
-    toast.success("Chuyển tiếp tin nhắn");
-    // Xử lý chuyển tiếp tin nhắn
+    setShowForwardModal(true);
+    setShowMessageActions(false);
   };
 
   const handleCopy = () => {
@@ -301,16 +314,19 @@ const MessageBubble = ({ message, isMe }) => {
       return <div className="italic text-gray-500">Tin nhắn đã bị thu hồi</div>;
     }
 
+    // Sử dụng fileUrl hoặc file_meta.url nếu có
+    const imageUrl = fileUrl || message.file_meta?.url;
+
     // Xử lý nội dung tin nhắn dựa vào loại
     switch (type) {
       case "image":
         return (
           <div className="mb-1">
             <img
-              src={fileUrl}
+              src={imageUrl}
               alt="Hình ảnh"
               className="max-h-60 rounded-lg cursor-pointer"
-              onClick={() => window.open(fileUrl, "_blank")}
+              onClick={() => window.open(imageUrl, "_blank")}
             />
           </div>
         );
@@ -322,7 +338,7 @@ const MessageBubble = ({ message, isMe }) => {
               className="max-h-60 rounded-lg w-full"
               preload="metadata"
             >
-              <source src={fileUrl} />
+              <source src={imageUrl} />
               Trình duyệt của bạn không hỗ trợ video này.
             </video>
           </div>
@@ -334,12 +350,12 @@ const MessageBubble = ({ message, isMe }) => {
               <BsFiletypeDocx size={24} />
             </div>
             <a
-              href={fileUrl}
+              href={imageUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="text-blue-500 hover:underline"
             >
-              {fileUrl ? fileUrl.split("/").pop() : "Tải xuống file"}
+              {imageUrl ? imageUrl.split("/").pop() : "Tải xuống file"}
             </a>
           </div>
         );
@@ -349,7 +365,7 @@ const MessageBubble = ({ message, isMe }) => {
             <div className="flex items-center">
               <BsMic size={20} className="mr-2" />
               <audio controls className="h-8">
-                <source src={fileUrl} />
+                <source src={imageUrl} />
               </audio>
             </div>
           </div>
@@ -411,8 +427,25 @@ const MessageBubble = ({ message, isMe }) => {
             {renderMessageActions()}
 
             <div className="flex flex-col">
+              {/* Hiển thị thông tin về tin nhắn chuyển tiếp */}{" "}
+              {message.forwarded_from && (
+                <div
+                  className={`text-xs mb-2 ${
+                    isMe ? "text-blue-100" : "text-gray-500"
+                  }`}
+                >
+                  <div className="flex items-center font-medium mb-1">
+                    <BsReplyAll
+                      size={12}
+                      className={`mr-1 ${
+                        isMe ? "text-blue-100" : "text-gray-500"
+                      }`}
+                    />
+                    <span>Tin nhắn được chuyển tiếp</span>
+                  </div>
+                </div>
+              )}
               {renderMessageContent()}
-
               <div className="flex items-center justify-end gap-1 mt-1">
                 <span className="text-xs opacity-70 whitespace-nowrap">
                   {time}
@@ -480,6 +513,13 @@ const MessageBubble = ({ message, isMe }) => {
           </div>
         </div>
       </div>
+      {/* Modal chuyển tiếp tin nhắn */}
+      {showForwardModal && (
+        <ForwardMessageModal
+          messageId={_id}
+          onClose={() => setShowForwardModal(false)}
+        />
+      )}
     </div>
   );
 };
