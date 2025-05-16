@@ -311,7 +311,11 @@ const MessageBubble = ({ message, isMe }) => {
   const renderMessageContent = () => {
     // Nếu tin nhắn bị thu hồi
     if (message.is_revoked) {
-      return <div className="italic text-gray-500">Tin nhắn đã bị thu hồi</div>;
+      return (
+        <div className={`italic ${isMe ? "text-blue-100" : "text-gray-500"}`}>
+          Tin nhắn đã bị thu hồi
+        </div>
+      );
     }
 
     // Sử dụng fileUrl hoặc file_meta.url nếu có

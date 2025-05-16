@@ -10,6 +10,8 @@ import {
   MdThumbUp,
 } from "react-icons/md";
 import MessageBubble from "./MessageBubble";
+import DateDivider from "./DateDivider";
+import StickyDateHeader from "./StickyDateHeader";
 import ConversationInfoPanel from "./ConversationInfoPanel";
 import UserProfileModal from "../user/UserProfileModal";
 import GroupInfoModal from "../group/GroupInfoModal";
@@ -18,6 +20,7 @@ import useAuthStore from "../../stores/authStore";
 import { toast } from "react-hot-toast";
 import socketManager from "../../services/SocketManager";
 import useGroupStore from "../../stores/groupStore";
+import { formatMessageTime, groupMessagesByDate } from "../../utils/formatters";
 
 const ChatWindow = ({ conversation }) => {
   const [newMessage, setNewMessage] = useState("");
@@ -25,10 +28,18 @@ const ChatWindow = ({ conversation }) => {
   const [showUserModal, setShowUserModal] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const fileInputRef = useRef(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const lastConversationIdRef = useRef(null);
+  const [showLoadMoreButton, setShowLoadMoreButton] = useState(false);
+  const scrollHeightRef = useRef(0);
+
+  // State và refs cho sticky header
+  const [currentStickyDate, setCurrentStickyDate] = useState(null);
+  const [showStickyHeader, setShowStickyHeader] = useState(false);
+  const dateMarkersRef = useRef(new Map()); // Lưu vị trí của các marker ngày
 
   const { user } = useAuthStore();
   const { fetchGroupDetails } = useGroupStore();
@@ -37,7 +48,10 @@ const ChatWindow = ({ conversation }) => {
     currentConversation,
     sendMessage,
     isLoadingMessages,
+    isLoadingOlderMessages,
+    hasMoreMessages,
     setCurrentConversation,
+    loadOlderMessages,
   } = useConversationStore();
 
   useEffect(() => {
@@ -57,9 +71,18 @@ const ChatWindow = ({ conversation }) => {
         }
       }
     };
-
     loadConversation();
   }, [conversation, setCurrentConversation]);
+
+  // Tự động cuộn xuống dưới khi một cuộc hội thoại được tải xong
+  useEffect(() => {
+    if (!isLoadingMessages && currentMessages.length > 0) {
+      // Chờ một chút để DOM cập nhật trước khi cuộn
+      setTimeout(() => {
+        scrollToBottom();
+      }, 100);
+    }
+  }, [isLoadingMessages]);
 
   useEffect(() => {
     const socket = socketManager.getSocket();
@@ -73,16 +96,148 @@ const ChatWindow = ({ conversation }) => {
     if (msgCount > 0 && msgCount % 10 === 0) {
       console.log("ChatWindow: Messages count:", msgCount);
     }
+  }, [currentMessages]); // Lưu vị trí cuộn trước khi bắt đầu tải tin nhắn cũ
+  useEffect(() => {
+    if (isLoadingOlderMessages && messagesContainerRef.current) {
+      // Lưu lại chiều cao hiện tại của container và vị trí cuộn
+      scrollHeightRef.current = messagesContainerRef.current.scrollHeight;
+    }
+  }, [isLoadingOlderMessages]);
+
+  // Xử lý sau khi thêm tin nhắn cũ (khi isLoadingOlderMessages chuyển từ true sang false)
+  useEffect(() => {
+    if (
+      !isLoadingOlderMessages &&
+      messagesContainerRef.current &&
+      scrollHeightRef.current > 0
+    ) {
+      // Tính toán vị trí cuộn mới để giữ nguyên vị trí đọc hiện tại
+      const newScrollHeight = messagesContainerRef.current.scrollHeight;
+      const scrollDiff = newScrollHeight - scrollHeightRef.current;
+
+      // Thiết lập vị trí cuộn để giữ người dùng ở cùng một vị trí tương đối
+      if (scrollDiff > 0) {
+        // console.log("Adjusting scroll position by", scrollDiff, "px");
+        messagesContainerRef.current.scrollTop = scrollDiff;
+      }
+
+      // Reset giá trị lưu trữ
+      scrollHeightRef.current = 0;
+    }
+  }, [isLoadingOlderMessages]);
+
+  // Cuộn xuống dưới cùng khi có tin nhắn mới
+  useEffect(() => {
+    // Nếu người dùng đang ở gần cuối trang, tự động cuộn xuống khi có tin nhắn mới
+    if (messagesContainerRef.current) {
+      const { scrollHeight, scrollTop, clientHeight } =
+        messagesContainerRef.current;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+
+      if (isNearBottom) {
+        scrollToBottom();
+      }
+    }
+  }, [currentMessages.length]);
+
+  // Cập nhật vị trí markers khi tin nhắn thay đổi
+  useEffect(() => {
+    // Chờ một chút để DOM cập nhật hoàn toàn
+    setTimeout(() => {
+      updateDateMarkerPositions();
+    }, 200);
   }, [currentMessages]);
 
+  // Cập nhật position markers khi kích thước container thay đổi
   useEffect(() => {
-    scrollToBottom();
-  }, [currentMessages]);
+    const resizeObserver = new ResizeObserver(() => {
+      updateDateMarkerPositions();
+    });
+
+    if (messagesContainerRef.current) {
+      resizeObserver.observe(messagesContainerRef.current);
+    }
+
+    return () => resizeObserver.disconnect();
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // Xử lý sự kiện cuộn để tải tin nhắn cũ hơn và cập nhật sticky header
+  const handleScroll = () => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    // Xử lý tải tin nhắn cũ khi cuộn đến đầu trang
+    if (
+      container.scrollTop === 0 &&
+      !isLoadingOlderMessages &&
+      hasMoreMessages
+    ) {
+      handleLoadOlderMessages();
+    }
+
+    // Xử lý hiển thị sticky header
+    if (dateMarkersRef.current.size === 0) {
+      // Nếu chưa có markers, tạo lại chúng
+      updateDateMarkerPositions();
+    } else {
+      // Xác định ngày hiển thị dựa trên vị trí cuộn hiện tại
+      let currentDate = null;
+      let minDistance = Infinity;
+
+      // Tìm marker gần nhất phía trên vị trí cuộn hiện tại
+      dateMarkersRef.current.forEach((position, date) => {
+        const distance = container.scrollTop - position;
+        if (distance >= -50 && distance < minDistance) {
+          // -50 là ngưỡng để bắt đầu hiển thị ngày mới sớm hơn một chút
+          minDistance = distance;
+          currentDate = date;
+        }
+      });
+
+      // Chỉ hiển thị header khi đã cuộn xuống một chút
+      setShowStickyHeader(container.scrollTop > 60);
+
+      // Cập nhật ngày hiển thị
+      if (currentDate !== currentStickyDate) {
+        setCurrentStickyDate(currentDate);
+      }
+    }
+  };
+
+  // Cập nhật vị trí của các marker ngày
+  const updateDateMarkerPositions = () => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    // Xóa markers cũ
+    dateMarkersRef.current.clear();
+
+    // Tìm tất cả các divider ngày trong container
+    const dateElements = container.querySelectorAll("[data-date]");
+    dateElements.forEach((element) => {
+      const date = element.getAttribute("data-date");
+      const rect = element.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      const relativePosition =
+        rect.top - containerRect.top + container.scrollTop;
+
+      dateMarkersRef.current.set(date, relativePosition);
+    });
+  };
+
+  // Xử lý tải tin nhắn cũ hơn
+  const handleLoadOlderMessages = async () => {
+    try {
+      await loadOlderMessages();
+    } catch (error) {
+      console.error("Lỗi khi tải tin nhắn cũ:", error);
+      setShowLoadMoreButton(true); // Hiển thị nút tải thêm nếu có lỗi
+    }
+  };
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if ((!newMessage.trim() && !selectedFile) || isLoadingMessages) return;
@@ -101,6 +256,7 @@ const ChatWindow = ({ conversation }) => {
       setNewMessage("");
       setSelectedFile(null);
 
+      // Đảm bảo luôn cuộn xuống dưới cùng sau khi gửi tin nhắn
       setTimeout(scrollToBottom, 100);
     } catch (error) {
       console.error("ChatWindow: Error sending message", error);
@@ -211,7 +367,6 @@ const ChatWindow = ({ conversation }) => {
               </p>
             </div>
           </div>
-
           <div className="flex items-center gap-4">
             <button className="text-gray-600 hover:bg-gray-100 p-2 rounded-full">
               <MdPhone size={20} />
@@ -227,57 +382,96 @@ const ChatWindow = ({ conversation }) => {
             >
               <MdInfo size={20} />
             </button>
-          </div>
-        </div>
-
-        <div className="flex-1 p-4 overflow-y-auto bg-white">
+          </div>{" "}
+        </div>{" "}
+        <div
+          className="flex-1 p-4 overflow-y-auto bg-white relative"
+          ref={messagesContainerRef}
+          onScroll={handleScroll}
+        >
+          {/* Hiển thị sticky date header */}
+          {showStickyHeader && currentStickyDate && (
+            <StickyDateHeader currentDate={currentStickyDate} />
+          )}
           <div className="flex flex-col">
+            {/* Loading indicator khi tải tin nhắn cũ hơn */}
+            {isLoadingOlderMessages && (
+              <div className="flex justify-center p-2">
+                <span className="loading loading-spinner loading-sm text-primary"></span>
+                <span className="ml-2 text-sm text-gray-500">
+                  Đang tải tin nhắn cũ hơn...
+                </span>
+              </div>
+            )}
+            {/* Nút tải thêm tin nhắn (hiển thị khi có lỗi hoặc không tự động tải được) */}
+            {hasMoreMessages &&
+              !isLoadingOlderMessages &&
+              showLoadMoreButton && (
+                <div className="flex justify-center p-2">
+                  <button
+                    onClick={handleLoadOlderMessages}
+                    className="btn btn-sm btn-outline btn-primary"
+                  >
+                    Tải thêm tin nhắn
+                  </button>
+                </div>
+              )}{" "}
+            {/* Danh sách tin nhắn đã được nhóm theo ngày */}
             {isLoadingMessages && currentMessages.length === 0 ? (
               <div className="flex justify-center items-center h-full">
                 <span className="loading loading-spinner loading-md text-primary"></span>
               </div>
             ) : currentMessages.length > 0 ? (
-              currentMessages.map((message) => (
-                <MessageBubble
-                  key={message._id}
-                  message={{
-                    _id: message._id, // Thay đổi id thành _id để đảm bảo nhất quán
-                    senderId:
-                      typeof message.sender_id === "object"
-                        ? message.sender_id._id
-                        : message.sender_id,
-                    text:
-                      message.message_type === "text" ? message.content : "",
-                    time: formatMessageTime(message.timestamp),
-                    status: message.status,
-                    type: message.message_type,
-                    fileUrl: message.file_meta?.url,
-                    is_revoked: message.is_revoked,
-                    senderName:
-                      typeof message.sender_id === "object"
-                        ? message.sender_id.name
-                        : "",
-                    senderAvatar:
-                      typeof message.sender_id === "object"
-                        ? message.sender_id.primary_avatar
-                        : null,
-                  }}
-                  isMe={
-                    typeof message.sender_id === "object"
-                      ? message.sender_id._id === user?._id
-                      : message.sender_id === user?._id
-                  }
-                />
-              ))
+              groupMessagesByDate(currentMessages).map((item) => {
+                if (item.type === "date") {
+                  return <DateDivider key={item.id} date={item.date} />;
+                } else if (item.type === "message") {
+                  const message = item.message;
+                  return (
+                    <MessageBubble
+                      key={message._id}
+                      message={{
+                        _id: message._id, // Thay đổi id thành _id để đảm bảo nhất quán
+                        senderId:
+                          typeof message.sender_id === "object"
+                            ? message.sender_id._id
+                            : message.sender_id,
+                        text:
+                          message.message_type === "text"
+                            ? message.content
+                            : "",
+                        time: formatMessageTime(message.timestamp),
+                        status: message.status,
+                        type: message.message_type,
+                        fileUrl: message.file_meta?.url,
+                        is_revoked: message.is_revoked,
+                        senderName:
+                          typeof message.sender_id === "object"
+                            ? message.sender_id.name
+                            : "",
+                        senderAvatar:
+                          typeof message.sender_id === "object"
+                            ? message.sender_id.primary_avatar
+                            : null,
+                      }}
+                      isMe={
+                        typeof message.sender_id === "object"
+                          ? message.sender_id._id === user?._id
+                          : message.sender_id === user?._id
+                      }
+                    />
+                  );
+                }
+                return null;
+              })
             ) : (
               <div className="flex justify-center items-center h-40 text-gray-400">
                 Chưa có tin nhắn nào. Hãy bắt đầu cuộc trò chuyện!
               </div>
             )}
-            <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} data-message-end />
           </div>
         </div>
-
         {selectedFile && (
           <div className="px-4 py-2 bg-gray-100 flex items-center justify-between">
             <div className="flex items-center">
@@ -296,7 +490,6 @@ const ChatWindow = ({ conversation }) => {
             </button>
           </div>
         )}
-
         <div className="px-4 py-2 border-t border-gray-200 bg-white flex-shrink-0">
           <form onSubmit={handleSendMessage} className="flex items-center">
             <div className="flex items-center gap-2 mr-2">
@@ -407,14 +600,6 @@ const ChatWindow = ({ conversation }) => {
   );
 };
 
-const formatMessageTime = (timestamp) => {
-  if (!timestamp) return "";
-
-  const messageDate = new Date(timestamp);
-  return messageDate.toLocaleTimeString("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-};
+// formatMessageTime đã được di chuyển sang utils/formatters.js
 
 export default ChatWindow;

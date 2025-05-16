@@ -1,10 +1,18 @@
 import api from "../utils/apiClient";
 
 const messageService = {
-  // Lấy tin nhắn theo ID cuộc trò chuyện
-  getMessagesByConversationId: async (conversationId) => {
+  // Lấy tin nhắn theo ID cuộc trò chuyện với phân trang
+  getMessagesByConversationId: async (
+    conversationId,
+    limit = 5,
+    before_id = null
+  ) => {
     try {
-      return await api.get(`/message/getByConversation/${conversationId}`);
+      let url = `/message/getByConversation/${conversationId}?limit=${limit}`;
+      if (before_id) {
+        url += `&before_id=${before_id}`;
+      }
+      return await api.get(url);
     } catch (error) {
       throw error;
     }

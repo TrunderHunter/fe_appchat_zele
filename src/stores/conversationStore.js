@@ -16,6 +16,8 @@ const useConversationStore = create(
       currentMessages: [],
       isLoadingConversations: false,
       isLoadingMessages: false,
+      isLoadingOlderMessages: false,
+      hasMoreMessages: false,
       error: null,
 
       // Lấy danh sách cuộc trò chuyện của người dùng
@@ -201,22 +203,28 @@ const useConversationStore = create(
 
           return { success: false, error: error.message };
         }
-      },
-
-      // Chọn cuộc trò chuyện hiện tại và tải tin nhắn
+      }, // Chọn cuộc trò chuyện hiện tại và tải tin nhắn mới nhất
       setCurrentConversation: async (conversation) => {
         set({
           currentConversation: conversation,
           isLoadingMessages: true,
           error: null,
+          // Reset danh sách tin nhắn khi chuyển cuộc trò chuyện
+          currentMessages: [],
         });
         try {
+          // Lấy 6 tin nhắn mới nhất
           const messages = await messageService.getMessagesByConversationId(
-            conversation._id
+            conversation._id,
+            6 // Lấy 6 tin nhắn
           );
+
           set({
             isLoadingMessages: false,
-            currentMessages: messages,
+            // Do tin nhắn được sắp xếp từ mới đến cũ, hiển thị từ dưới lên
+            currentMessages: messages.reverse(),
+            currentPage: 1,
+            hasMoreMessages: messages.length === 6, // Nếu nhận đủ 6 tin nhắn, có thể có thêm tin nhắn cũ hơn
           });
           return { success: true };
         } catch (error) {
@@ -226,6 +234,7 @@ const useConversationStore = create(
               currentMessages: [],
               isLoadingMessages: false,
               error: null,
+              hasMoreMessages: false,
             });
             return { success: true };
           }
@@ -234,6 +243,7 @@ const useConversationStore = create(
           set({
             isLoadingMessages: false,
             error: error.response?.data?.message || "Không thể tải tin nhắn",
+            hasMoreMessages: false,
           });
           return { success: false };
         }
@@ -338,11 +348,17 @@ const useConversationStore = create(
           const messageExists = currentMessages.some(
             (msg) => msg._id === message._id
           );
-
           if (!messageExists) {
             set({
               currentMessages: [...currentMessages, message],
             });
+
+            // Đảm bảo cuộn xuống dưới trong ChatWindow
+            setTimeout(() => {
+              const messageEndElement =
+                document.querySelector("[data-message-end]");
+              messageEndElement?.scrollIntoView({ behavior: "smooth" });
+            }, 100);
           }
         }
 
@@ -481,7 +497,7 @@ const useConversationStore = create(
               ? { ...state.currentConversation, participants }
               : state.currentConversation,
         }));
-      },      // Cập nhật tin nhắn bị thu hồi
+      }, // Cập nhật tin nhắn bị thu hồi
       updateRevokedMessage: (messageId) => {
         if (!messageId) {
           console.warn("updateRevokedMessage called with invalid messageId");
@@ -493,9 +509,13 @@ const useConversationStore = create(
         // Cập nhật trong danh sách tin nhắn hiện tại
         set((state) => {
           // Debug để kiểm tra xem tin nhắn có tồn tại trong danh sách hiện tại không
-          const messageExists = state.currentMessages.some(msg => msg._id === messageId);
-          console.log(`Message ${messageId} exists in currentMessages: ${messageExists}`);
-          
+          const messageExists = state.currentMessages.some(
+            (msg) => msg._id === messageId
+          );
+          console.log(
+            `Message ${messageId} exists in currentMessages: ${messageExists}`
+          );
+
           return {
             currentMessages: state.currentMessages.map((msg) =>
               msg._id === messageId ? { ...msg, is_revoked: true } : msg
@@ -507,14 +527,18 @@ const useConversationStore = create(
         set((state) => {
           // Kiểm tra và log các cuộc trò chuyện có tin nhắn cuối cùng là tin nhắn này
           const relevantConvs = state.conversations.filter(
-            conv => conv.last_message && conv.last_message._id === messageId
+            (conv) => conv.last_message && conv.last_message._id === messageId
           );
-          console.log(`Found ${relevantConvs.length} conversations with last_message ID ${messageId}`);
-          
+          console.log(
+            `Found ${relevantConvs.length} conversations with last_message ID ${messageId}`
+          );
+
           return {
             conversations: state.conversations.map((conv) => {
               if (conv.last_message && conv.last_message._id === messageId) {
-                console.log(`Updating last_message in conversation: ${conv._id}`);
+                console.log(
+                  `Updating last_message in conversation: ${conv._id}`
+                );
                 return {
                   ...conv,
                   last_message: { ...conv.last_message, is_revoked: true },
@@ -553,6 +577,73 @@ const useConversationStore = create(
               ? []
               : state.currentMessages,
         }));
+      }, // Tải tin nhắn cũ hơn (khi người dùng cuộn lên trên)
+      loadOlderMessages: async () => {
+        const {
+          currentConversation,
+          currentMessages,
+          isLoadingOlderMessages,
+          hasMoreMessages,
+        } = get();
+
+        // Nếu đang tải hoặc không có thêm tin nhắn cũ hơn, không làm gì cả
+        if (
+          isLoadingOlderMessages ||
+          !hasMoreMessages ||
+          !currentConversation ||
+          currentMessages.length === 0
+        ) {
+          return { success: false };
+        }
+
+        // Đặt cờ đang tải
+        set({ isLoadingOlderMessages: true });
+
+        try {
+          // Lấy ID của tin nhắn cũ nhất hiện có làm điểm bắt đầu để tải thêm
+          const oldestMessageId = currentMessages[0]._id;
+
+          // Tải thêm 6 tin nhắn cũ hơn
+          const olderMessages =
+            await messageService.getMessagesByConversationId(
+              currentConversation._id,
+              6,
+              oldestMessageId
+            );
+
+          if (olderMessages && olderMessages.length > 0) {
+            // Đảo ngược để tin nhắn mới nhất ở dưới cùng
+            const reversedOlderMessages = olderMessages.reverse();
+
+            set({
+              isLoadingOlderMessages: false,
+              // Thêm tin nhắn cũ hơn vào đầu mảng hiện tại
+              currentMessages: [...reversedOlderMessages, ...currentMessages],
+              hasMoreMessages: olderMessages.length === 6, // Còn tin nhắn cũ hơn nếu nhận đủ 6 tin
+            });
+
+            return {
+              success: true,
+              newMessages: reversedOlderMessages,
+              hasMore: olderMessages.length === 6,
+            };
+          } else {
+            // Không còn tin nhắn cũ hơn
+            set({
+              isLoadingOlderMessages: false,
+              hasMoreMessages: false,
+            });
+            return { success: true, newMessages: [], hasMore: false };
+          }
+        } catch (error) {
+          console.error("Error loading older messages:", error);
+          set({
+            isLoadingOlderMessages: false,
+            error:
+              error.response?.data?.message || "Không thể tải thêm tin nhắn",
+          });
+          return { success: false };
+        }
       },
 
       // Reset store
@@ -563,6 +654,8 @@ const useConversationStore = create(
           currentMessages: [],
           isLoadingConversations: false,
           isLoadingMessages: false,
+          isLoadingOlderMessages: false,
+          hasMoreMessages: false,
           error: null,
         });
       },
