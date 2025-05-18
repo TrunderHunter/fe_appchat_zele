@@ -18,7 +18,7 @@ import socketManager from "../../services/SocketManager";
 import useGroupStore from "../../stores/groupStore";
 import { formatMessageTime, groupMessagesByDate } from "../../utils/formatters";
 import { createScrollHandlers } from "../../utils/scrollUtils";
-
+import { useStringee } from "../../context/StringeeContext";
 const ChatWindow = ({ conversation }) => {
   const [showInfoPanel, setShowInfoPanel] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
@@ -29,7 +29,7 @@ const ChatWindow = ({ conversation }) => {
   const lastConversationIdRef = useRef(null);
   const [showLoadMoreButton, setShowLoadMoreButton] = useState(false);
   const scrollHeightRef = useRef(0);
-
+  const { makeCall, isAuthenticated, isConnected } = useStringee();
   const [currentStickyDate, setCurrentStickyDate] = useState(null);
   const [showStickyHeader, setShowStickyHeader] = useState(false);
   const dateMarkersRef = useRef(new Map());
@@ -68,6 +68,26 @@ const ChatWindow = ({ conversation }) => {
     }
   }, [loadOlderMessages]);
 
+  const handleCallButtonClick = useCallback((userId, isVideoCall) => {
+    if (!userId) {
+      toast.error("Không thể xác định người dùng để gọi");
+      return;
+    }
+    
+    if (!isConnected || !isAuthenticated) {
+      toast.error("Đang kết nối đến dịch vụ cuộc gọi. Vui lòng thử lại sau.");
+      console.error("Stringee client not ready: connected=", isConnected, "authenticated=", isAuthenticated);
+      return;
+    }
+    
+    console.log(`Initiating ${isVideoCall ? 'video' : 'audio'} call to user: ${userId}`);
+    try {
+      makeCall(userId, isVideoCall);
+    } catch (error) {
+      console.error("Error making call:", error);
+      toast.error("Không thể thực hiện cuộc gọi. Vui lòng thử lại sau.");
+    }
+  }, [makeCall, isConnected, isAuthenticated]);
   const handleScroll = useCallback(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
@@ -298,18 +318,33 @@ const ChatWindow = ({ conversation }) => {
               </p>
             </div>
           </div>
+          
           <div className="flex items-center gap-4">
-            <button className="text-gray-600 hover:bg-gray-100 p-2 rounded-full">
-              <MdPhone size={20} />
-            </button>
-            <button className="text-gray-600 hover:bg-gray-100 p-2 rounded-full">
-              <MdVideoCall size={20} />
-            </button>
+            {currentConversation.type === "personal" && (
+              <>
+                <button 
+                  onClick={() => handleCallButtonClick(
+                    currentConversation.participants?.find(p => p.user_id !== user._id)?.user_id,
+                    false
+                  )}
+                  className="text-gray-600 hover:bg-gray-100 p-2 rounded-full"
+                >
+                  <MdPhone size={20} />
+                </button>
+                <button 
+                  onClick={() => handleCallButtonClick(
+                    currentConversation.participants?.find(p => p.user_id !== user._id)?.user_id,
+                    true
+                  )}
+                  className="text-gray-600 hover:bg-gray-100 p-2 rounded-full"
+                >
+                  <MdVideoCall size={20} />
+                </button>
+              </>
+            )}
             <button
-              className={`text-gray-600 hover:bg-gray-100 p-2 rounded-full ${
-                showInfoPanel ? "bg-gray-100" : ""
-              }`}
               onClick={() => setShowInfoPanel(!showInfoPanel)}
+              className="text-gray-600 hover:bg-gray-100 p-2 rounded-full"
             >
               <MdInfo size={20} />
             </button>

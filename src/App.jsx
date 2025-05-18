@@ -21,6 +21,10 @@ import useMessageSocket from "./hooks/useMessageSocket";
 import useGroupSocket from "./hooks/useGroupSocket";
 import useFriendRequestSocket from "./hooks/useFriendRequestSocket";
 
+// Import StringeeProvider and CallModal
+import { StringeeProvider } from "./context/StringeeContext";
+import CallModal from "./components/call/CallModal";
+
 function App() {
   const { checkAuth, user, isAuthenticated } = useAuthStore();
 
@@ -28,6 +32,8 @@ function App() {
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
+
+  // Removed the Stringee initialization code since it's now handled in StringeeContext
 
   // Khởi tạo socket khi người dùng đã đăng nhập - chỉ chạy một lần khi auth thay đổi
   useEffect(() => {
@@ -41,6 +47,7 @@ function App() {
       socketManager.disconnect();
     }
   }, [isAuthenticated, user?._id]); // Chỉ phụ thuộc vào trạng thái đăng nhập và ID
+  
   // Khởi tạo socket cho các sự kiện tin nhắn, nhóm và lời mời kết bạn
   useMessageSocket();
   useGroupSocket();
@@ -59,45 +66,48 @@ function App() {
   return (
     <ModalProvider>
       <SocketProvider>
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            duration: 3000,
-            style: {
-              borderRadius: "10px",
-              background: "#333",
-              color: "#fff",
-            },
-          }}
-        />
+        <StringeeProvider>
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              duration: 3000,
+              style: {
+                borderRadius: "10px",
+                background: "#333",
+                color: "#fff",
+              },
+            }}
+          />
 
-        {/* Global Modals - Accessible from anywhere in the app */}
-        <UserProfileModal />
-        <ProfileModal />
+          {/* Global Modals - Accessible from anywhere in the app */}
+          <UserProfileModal />
+          <ProfileModal />
+          <CallModal />
 
-        <Routes>
-          {/* Public Routes - Chỉ hiển thị khi chưa đăng nhập */}
-          <Route element={<PublicRoute />}>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-            <Route path="/verify-otp" element={<VerifyOTPPage />} />
-            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
-          </Route>
-
-          {/* Protected Routes - Chỉ hiển thị khi đã đăng nhập */}
-          <Route element={<ProtectedRoute />}>
-            <Route path="/" element={<MainLayout />}>
-              <Route index element={<Navigate to="/messages" replace />} />
-              <Route path="messages" element={<MessengerPage />} />
-              <Route path="friends" element={<FriendsPage />} />
-              {/* Các route khác nếu cần */}
+          <Routes>
+            {/* Public Routes - Chỉ hiển thị khi chưa đăng nhập */}
+            <Route element={<PublicRoute />}>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="/verify-otp" element={<VerifyOTPPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
             </Route>
-          </Route>
 
-          {/* Fallback Route */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            {/* Protected Routes - Chỉ hiển thị khi đã đăng nhập */}
+            <Route element={<ProtectedRoute />}>
+              <Route path="/" element={<MainLayout />}>
+                <Route index element={<Navigate to="/messages" replace />} />
+                <Route path="messages" element={<MessengerPage />} />
+                <Route path="friends" element={<FriendsPage />} />
+                {/* Các route khác nếu cần */}
+              </Route>
+            </Route>
+
+            {/* Fallback Route */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </StringeeProvider>
       </SocketProvider>
     </ModalProvider>
   );

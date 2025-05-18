@@ -18,8 +18,8 @@ const apiClient = axios.create({
 // Request interceptor
 apiClient.interceptors.request.use(
   (config) => {
-    // Không cần đặt token vào header nữa vì cookie sẽ tự động được gửi đi
-    // với mỗi request nếu withCredentials: true
+    // Log request for debugging CORS issues
+    console.log(`Making ${config.method.toUpperCase()} request to: ${config.baseURL}${config.url}`);
     return config;
   },
   (error) => {
@@ -35,9 +35,6 @@ apiClient.interceptors.response.use(
     if (response.data && typeof response.data === "object") {
       // Nếu request thành công, trả về trực tiếp data
       if (response.data.status === "success") {
-        // Lưu ý: Không cần lưu token vào localStorage nữa
-        // vì server sẽ tự động thiết lập cookie
-
         return response.data.data;
       }
 
@@ -51,6 +48,16 @@ apiClient.interceptors.response.use(
     return response.data;
   },
   (error) => {
+    // Xử lý lỗi CORS cụ thể
+    if (error.message === 'Network Error') {
+      console.error('CORS Error: The API server might not allow cross-origin requests from this origin.');
+      toast.error('Không thể kết nối đến máy chủ. Vui lòng kiểm tra CORS settings.');
+      
+      // Thêm hướng dẫn cho developer trong console
+      console.info('Developer note: Make sure your backend has proper CORS configuration:');
+      console.info('app.use(cors({ origin: "http://localhost:5173", credentials: true }));');
+    }
+    
     // Xử lý lỗi response
     const errorMessage =
       error.response?.data?.message ||
@@ -59,15 +66,13 @@ apiClient.interceptors.response.use(
 
     // Hiển thị thông báo lỗi chỉ khi không phải lỗi xác thực từ checkAuth
     const isCheckAuthRequest = error.config?.url?.includes("/auth/check-auth");
-    if (!isCheckAuthRequest) {
+    if (!isCheckAuthRequest && error.message !== 'Network Error') {
       toast.error(errorMessage);
     }
 
     // Xử lý lỗi 401 - Unauthorized (token hết hạn hoặc không hợp lệ)
     if (error.response?.status === 401) {
       console.log("Unauthorized access");
-      // Không cần xóa token từ localStorage nữa
-      // Server sẽ xử lý việc xóa/vô hiệu hóa cookie
     }
 
     return Promise.reject(error);
